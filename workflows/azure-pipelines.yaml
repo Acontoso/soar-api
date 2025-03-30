@@ -1,0 +1,36 @@
+trigger:
+  branches:
+    include:
+    - main
+
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  aws.rolecredential.maxduration: '3600'
+
+stages:
+- stage: TerraformDeploy
+  jobs:
+  - deployment: TerraformDependancy
+    displayName: Deploy Terraform Dependancy
+    environment: 'aws-sec-log'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+            persistCredentials: true
+          - task: AWSShellScript@1
+            displayName: "Terraform Deploy"
+            inputs:
+              awsCredentials: "weshealth-seclog"
+              disableAutoCwd: true
+              regionName: "ap-southeast-2"
+              scriptType: inline
+              inlineScript: |
+                terraform init
+                terraform apply -auto-approve -input=false
+              workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'

@@ -1,0 +1,70 @@
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  aws.rolecredential.maxduration: '3600'
+
+stages:
+- stage: SASTIaC
+  dependsOn: []
+  jobs:
+  - job: TerraformSAST
+    steps:
+    - script: |
+        pip3 install checkov
+      name: CheckovInstall
+    - script: |
+        checkov --quiet -d terraform --download-external-modules true
+        checkov --quiet --output junitxml -d terraform --download-external-modules true > checkov-results.xml
+      name: CheckovRun
+    - task: PublishTestResults@2
+      displayName: "Checkov Results"
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFormat: "JUnit"
+        testResultsFiles: "**/checkov-*.xml"
+        searchFolder: "$(Build.SourcesDirectory)"
+        mergeTestResults: false
+        testRuntitle: 'SOAR API Checkov - "$(System.PullRequest.SourceCommitId)"'
+        failTaskOnFailedTests: false
+        publishRunAttachments: true
+
+- stage: SASTCode
+  dependsOn: []
+  jobs:
+  - job: Dependency_Scanning_Codebase
+    steps:
+    - script: |
+        python -m pip install --upgrade pip
+      name: PipUpgrade
+    - task: AdvancedSecurity-Dependency-Scanning@1
+  - job: Code_Scanning_Codebase
+    steps:
+    - task: AdvancedSecurity-Codeql-Init@1
+      inputs:
+        languages: "python"
+        querysuite: 'security-extended'
+        sourcesfolder: $(System.DefaultWorkingDirectory)/application
+    - task: AdvancedSecurity-Codeql-Analyze@1
+    - task: AdvancedSecurity-Publish@1
+
+- stage: Terraform
+  dependsOn: []
+  jobs:
+  - job: TerraformCI
+    displayName: Terraform CI
+    steps:
+    - task: AWSShellScript@1
+      displayName: "Terraform Plan"
+      inputs:
+        awsCredentials: "weshealth-seclog"
+        regionName: "ap-southeast-2"
+        scriptType: inline
+        disableAutoCwd: true
+        inlineScript: |
+          terraform init
+          terraform validate
+          terraform plan
+        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
