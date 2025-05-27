@@ -1,0 +1,302 @@
+openapi: 3.0.3
+info:
+  title: SOAR API
+  version: 1.0.0
+  description: API for SOAR enrichment and response automation
+
+servers:
+  - url: / # Typically replaced with your deployed API Gateway URL
+
+paths:
+  /:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /ipabusedb:
+    get:
+      summary: Lookup IP in AbuseIPDB
+      parameters:
+        - in: query
+          name: ip
+          schema:
+            type: string
+          required: true
+          description: IP address to check
+      responses:
+        '200':
+          description: AbuseIPDB lookup result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AbuseIPDBResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/UpstreamError'
+
+  /anomali:
+    get:
+      summary: Lookup IOC in Anomali ThreatStream
+      parameters:
+        - in: query
+          name: ioc
+          schema:
+            type: string
+          required: true
+          description: Indicator of Compromise (IOC) to check
+      responses:
+        '200':
+          description: Anomali lookup result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomaliResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/UpstreamError'
+
+  /urlscan:
+    post:
+      summary: Scan a URL with URLScan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UrlScanRequest'
+      responses:
+        '200':
+          description: URLScan result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UrlScanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /datp/upload:
+    post:
+      summary: Upload IOC to Microsoft Defender (DATP)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatpUploadRequest'
+      responses:
+        '200':
+          description: DATP upload result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatpUploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /azuread/blockip:
+    post:
+      summary: Block IP in Azure AD Named Location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AzureAdBlockIpRequest'
+      responses:
+        '200':
+          description: Azure AD block result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AzureAdBlockIpResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /sase/block:
+    post:
+      summary: Block IOC in SASE (Umbrella)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaseBlockRequest'
+      responses:
+        '200':
+          description: SASE block result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaseBlockResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UpstreamError:
+      description: Upstream API issue
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Health check message
+
+    AbuseIPDBResponse:
+      type: object
+      description: AbuseIPDB lookup result
+      properties:
+        data:
+          type: object
+          description: AbuseIPDB data
+
+    AnomaliResponse:
+      type: object
+      description: Anomali lookup result
+      properties:
+        data:
+          type: object
+          description: Anomali data
+
+    UrlScanRequest:
+      type: object
+      properties:
+        ioc:
+          type: string
+          description: URL to scan
+        incident_id:
+          type: string
+          description: Incident ID
+      required: [ioc, incident_id]
+
+    UrlScanResponse:
+      type: object
+      description: URLScan result
+      properties:
+        data:
+          type: object
+          description: URLScan data
+
+    DatpUploadRequest:
+      type: object
+      properties:
+        ioc:
+          type: string
+          description: Indicator of Compromise
+        action:
+          type: string
+          enum: [Block, Audit, BlockAndRemediate]
+          description: Action to take
+        incident_id:
+          type: string
+          description: Incident ID
+      required: [ioc, action, incident_id]
+
+    DatpUploadResponse:
+      type: object
+      description: DATP upload result
+      properties:
+        data:
+          type: object
+          description: DATP upload data
+
+    AzureAdBlockIpRequest:
+      type: object
+      properties:
+        ioc:
+          type: string
+          description: IP to block
+        list_id:
+          type: string
+          description: Named location list ID
+        list_name:
+          type: string
+          description: Named location list name
+        incident_id:
+          type: string
+          description: Incident ID
+      required: [ioc, list_id, list_name, incident_id]
+
+    AzureAdBlockIpResponse:
+      type: object
+      description: Azure AD block result
+      properties:
+        data:
+          type: object
+          description: Azure AD block data
+
+    SaseBlockRequest:
+      type: object
+      properties:
+        ioc:
+          type: string
+          description: Indicator of Compromise
+        incident_id:
+          type: string
+          description: Incident ID
+      required: [ioc, incident_id]
+
+    SaseBlockResponse:
+      type: object
+      description: SASE block result
+      properties:
+        data:
+          type: object
+          description: SASE block data
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Additional error details
+
+security:
+  - bearerAuth: []
