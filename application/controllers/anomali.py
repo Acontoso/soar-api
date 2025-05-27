@@ -1,6 +1,6 @@
 import os
 import requests
-from services.servicesaws import SSMServices, DynamoDBService
+from application.services.servicesaws import SSMServices, DynamoDBService
 from flask import current_app
 from datetime import datetime
 import re

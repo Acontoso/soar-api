@@ -1,5 +1,6 @@
 import boto3
 import base64
+from typing import Optional
 from flask import current_app
 from boto3.dynamodb.types import TypeDeserializer
 
@@ -25,7 +26,11 @@ class DynamoDBService:
         hash_key_value: str,
         sort_key: str,
         sort_key_value: str,
-    ) -> dict:
+    ) -> Optional[dict]:
+        """Get item from DynamoDB table"""
+        if not all([table, table, hash_key, hash_key_value, sort_key, sort_key_value]):
+            current_app.logger.error("One or more required parameters are empty when calling put_item.")
+            return None
         response = self.dynamodb_client.get_item(
             TableName=table,
             Key={hash_key: {"S": hash_key_value}, sort_key: {"S": sort_key_value}},
@@ -40,13 +45,19 @@ class DynamoDBService:
         else:
             return {}
 
-    def put_item(self, table: str, item: dict) -> None:
+    def put_item(self, table: str, item: dict) -> Optional[bool]:
+        """Put item into DynamoDB table"""
         try:
+            if not all([table, item]):
+                current_app.logger.error("One or more required parameters are empty when calling put_item.")
+                return
             self.dynamodb_client.put_item(TableName=table, Item=item)
-            current_app.logger.error("[+] Successful Database write")
+            current_app.logger.error(f"[+] Successful Database write on {table}")
+            return True
         except Exception as error:
             current_app.logger.error("[-] Failed to add record in database, no stress")
             current_app.logger.error(f"{error}")
+            return False
 
 
 class SSMServices:

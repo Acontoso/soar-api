@@ -2,7 +2,7 @@ import requests
 from flask import current_app, jsonify, g
 import flask
 import jwt
-from jwt import algorithms
+import jwt.algorithms
 
 #Auth is done at the API gateway. Since its a proxy integration to lambda where lambda function handles routing, there needs to be scope checks configured... Done at later date
 #Below code works and successfully validates the token
@@ -34,7 +34,7 @@ def verify_jwt(request: flask.Request):
             raise ValueError("Token does not contain a valid header")
         kid = unverified_header["kid"]
         key = get_jwk(kid)
-        public_key = algorithms.RSAAlgorithm.from_jwk(key)
+        public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
         # Decode and verify the JWT
         payload = jwt.decode(
             token,

@@ -1,7 +1,7 @@
 from flask import Flask
-from utils.logs import setup_standard_logger
-from routes.route import init_routes
-from middleware.reqlog import before_request, after_request
+from application.utils.logs import setup_standard_logger
+from application.routes.route import init_routes
+from application.middleware.reqlog import before_request, after_request
 import awsgi
 
 
@@ -15,13 +15,13 @@ def create_app():
     init_routes(app)
     return app
 
+app = create_app()
 
-def lambda_handler(event, context):
-    app = create_app()
-    response = awsgi.response(app, event, context)
-    return response
-
-
-# if __name__ == "__main__":
+# def lambda_handler(event, context):
 #     app = create_app()
-#     app.run()
+#     response = awsgi.response(app, event, context)
+#     return response
+
+
+if __name__ == "__main__":
+    app.run()

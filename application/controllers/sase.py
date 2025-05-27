@@ -1,7 +1,6 @@
 import os
-import requests
-from services.servicesaws import DynamoDBService
-from services.umbrella import Umbrella
+from application.services.servicesaws import DynamoDBService
+from application.services.umbrella import Umbrella
 from flask import current_app
 from datetime import datetime
 import re

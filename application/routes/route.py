@@ -1,12 +1,11 @@
 # routes.py
 from flask import Flask, jsonify, request, g
-from controllers.abuseipdb import IPAbuseDB
-from controllers.anomali import Anomali
-from controllers.defender import DATP
-from controllers.urlscan import URLScan
-from controllers.azad import AzureAD
-from controllers.sase import SASE
-from middleware.authen import verify_scopes
+from application.controllers.abuseipdb import IPAbuseDB
+from application.controllers.anomali import Anomali
+from application.controllers.defender import DATP
+from application.controllers.azad import AzureAD
+from application.controllers.sase import SASE
+from application.middleware.authen import verify_scopes
 
 VALID_ACTIONS = [
     "Block",
@@ -31,7 +30,13 @@ def init_routes(app: Flask):
     def ipabuse_path():
         required_scopes = ["soar-api/admin.readwrite.all"]
         if verify_scopes(g.token, required_scopes):
-            if len(request.args) == 1:
+            if len(request.args) == 0:
+                response = jsonify(
+                    {"error": "Missing ip uri param, please pass a IP address"}
+                )
+                response.status_code = 400
+                return response
+            elif len(request.args) == 1:
                 param = request.args.to_dict()
                 ip = param.get("ip", None)
                 if ip:
@@ -99,35 +104,6 @@ def init_routes(app: Flask):
             )
             response.status_code = 401
             return response
-        
-    @app.route("/urlscan", methods=["POST"])
-    def urlscan():
-        required_scopes = ["soar-api/admin.readwrite.all"]
-        if verify_scopes(g.token, required_scopes):
-            if request.is_json:
-                data = request.get_json()
-                try:
-                    ioc, incident_id = data.values()
-                except Exception as error:
-                    response = jsonify(
-                        {
-                            "error": "Failed to unpack all POST arguments, please provide IOC & Incident ID for URL scan trigger"
-                        }
-                    )
-                    response.status_code = 400
-                    return response
-                resp_data = URLScan.scan(ioc, incident_id)
-                return jsonify(resp_data)
-            else:
-                response = jsonify({"error": "Request must be JSON"})
-                response.status_code = 400
-                return response
-        else:
-            response = jsonify(
-                {"error": "Missing required scopes in access token in API call"}
-            )
-            response.status_code = 401
-            return response
 
     @app.route("/datp/upload", methods=["POST"])
     def ioc_post_datp():
@@ -182,7 +158,7 @@ def init_routes(app: Flask):
                     )
                     response.status_code = 400
                     return response
-                resp_data = AzureAD.ip_upload(ioc, incident_id)
+                resp_data = AzureAD.ip_upload(ioc, incident_id, list_id, list_name)
                 return jsonify(resp_data)
             else:
                 response = jsonify({"error": "Request must be JSON"})

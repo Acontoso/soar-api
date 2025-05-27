@@ -1,6 +1,6 @@
 import os
-from services.servicesaws import SSMServices, DynamoDBService
-from services.azuread import Azure
+from application.services.servicesaws import SSMServices, DynamoDBService
+from application.services.azuread import Azure
 from flask import current_app
 from datetime import datetime
 import ipaddress

@@ -1,8 +1,8 @@
 from flask import request, g
 import time
 import urllib.parse
-from utils.logs import access_logger
-from middleware.authen import verify_jwt
+from application.utils.logs import access_logger
+from application.middleware.authen import verify_jwt
 
 
 def before_request():

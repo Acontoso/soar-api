@@ -1,6 +1,6 @@
 import os
-from services.servicesaws import DynamoDBService
-from services.defenderservice import Defender
+from application.services.servicesaws import DynamoDBService
+from application.services.defenderservice import Defender
 from flask import current_app
 from datetime import datetime
 import re

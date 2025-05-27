@@ -1,6 +1,6 @@
 import requests
 from requests.auth import HTTPBasicAuth
-from services.servicesaws import SSMServices
+from application.services.servicesaws import SSMServices
 from flask import current_app
 import json
 import os

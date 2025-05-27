@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 import requests
-from services.servicesaws import SSMServices
+from typing import Optional
+from application.services.servicesaws import SSMServices
 from flask import current_app
 import json
 import os
@@ -16,6 +17,9 @@ def generate_short_uuid():
 class Defender:
     @classmethod
     def upload(cls, ioc: str, type: str, action: str, incident_id: str) -> bool:
+        if not all([ioc, type, action, incident_id]):
+            current_app.logger.error("One or more required parameters are empty.")
+            return False
         token = cls.access_token_ms_sec_api()
         if token:
             result = cls.check_indicator(ioc, token)
@@ -45,7 +49,7 @@ class Defender:
         return payload
 
     @classmethod
-    def access_token_ms_sec_api(cls) -> str:
+    def access_token_ms_sec_api(cls) -> Optional[str]:
         """Get OAuth access token to send data to Microsoft Defender 365"""
         ssm = SSMServices(REGION)
         current_app.logger.info("[+] Requesting API key for DATP Check")
@@ -74,16 +78,23 @@ class Defender:
                 current_app.logger.error(f"{error}")
                 retry_count += 1
                 continue
-            token = response.json()["access_token"]
-            current_app.logger.info(
-                "[+] Successfully recieved token from Azure AD re DATP"
-            )
-            return token
-        if retry_count == max_retries:
-            current_app.logger.error(
-                "[-] Failed to get upsteam to response, returning empty response"
-            )
-            return None
+            token = response.json().get("access_token")
+            if token:
+                current_app.logger.info(
+                    "[+] Successfully recieved token from Azure AD re DATP"
+                )
+                return token
+            else:
+                current_app.logger.error(
+                    "[-] Failed to get access token from Azure AD, retrying..."
+                )
+                retry_count += 1
+                continue
+        current_app.logger.error(
+            "[-] Failed to get access token from Azure AD after multiple retries"
+        )
+        return None
+
 
     @classmethod
     def check_indicator(cls, indicator: str, token: str) -> bool:

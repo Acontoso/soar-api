@@ -1,6 +1,7 @@
 import requests
-from services.servicesaws import SSMServices
+from application.services.servicesaws import SSMServices
 from flask import current_app
+from typing import Optional
 import os
 import json
 
@@ -10,6 +11,9 @@ REGION = "ap-southeast-2"
 class Azure:
     @classmethod
     def az_ad_list_upload(cls, ioc: str, list_id:str, list_name: str) -> bool:
+        if not all([ioc, list_id, list_name]):
+            current_app.logger.error("One or more required parameters are empty.")
+            return False
         endpoint = f"https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations/{list_id}"
         payload = {
             "@odata.type": "#microsoft.graph.ipNamedLocation",
@@ -68,7 +72,7 @@ class Azure:
         return payload
 
     @classmethod
-    def access_token_graph_api(cls) -> str:
+    def access_token_graph_api(cls) -> Optional[str]:
         """Get OAuth access token to send data to MS Graph API"""
         ssm = SSMServices(REGION)
         current_app.logger.info("[+] Requesting API key for Graph API")
@@ -97,13 +101,19 @@ class Azure:
                 current_app.logger.error(f"{error}")
                 retry_count += 1
                 continue
-            token = response.json()["access_token"]
-            current_app.logger.info(
-                "[+] Successfully recieved token from Azure AD re DATP"
-            )
-            return token
-        if retry_count == max_retries:
-            current_app.logger.error(
-                "[-] Failed to get upsteam to response, returning empty response"
-            )
-            return None
+            token = response.json().get("access_token")
+            if token:
+                current_app.logger.info(
+                    "[+] Successfully recieved token from Azure AD re DATP"
+                )
+                return token
+            else:
+                current_app.logger.error(
+                    "[-] Failed to get access token from Azure AD, retrying..."
+                )
+                retry_count += 1
+                continue
+        current_app.logger.error(
+            "[-] Failed to get access token from Azure AD after multiple retries"
+        )
+        return None
