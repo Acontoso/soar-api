@@ -15,13 +15,13 @@ def create_app():
     init_routes(app)
     return app
 
+
 app = create_app()
 
-# def lambda_handler(event, context):
-#     app = create_app()
-#     response = awsgi.response(app, event, context)
-#     return response
+def lambda_handler(event, context):
+    response = awsgi.response(app, event, context)
+    return response
 
 
-if __name__ == "__main__":
-    app.run()
+# if __name__ == "__main__":
+#     app.run()
