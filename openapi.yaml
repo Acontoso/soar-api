@@ -5,23 +5,16 @@ info:
   description: API for SOAR enrichment and response automation
 
 servers:
-  - url: / # Typically replaced with your deployed API Gateway URL
+  - url: https://m86hizeep0.execute-api.ap-southeast-2.amazonaws.com/core/ # Typically replaced with your deployed API Gateway URL
 
 paths:
-  /:
-    get:
-      summary: Health check
-      responses:
-        '200':
-          description: API is healthy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HealthResponse'
-
+  # --- Enrichment Endpoints ---
   /ipabusedb:
     get:
+      tags: [Enrichment]
       summary: Lookup IP in AbuseIPDB
+      security:
+        - bearerAuth: []
       parameters:
         - in: query
           name: ip
@@ -45,7 +38,10 @@ paths:
 
   /anomali:
     get:
+      tags: [Enrichment]
       summary: Lookup IOC in Anomali ThreatStream
+      security:
+        - bearerAuth: []
       parameters:
         - in: query
           name: ioc
@@ -67,9 +63,13 @@ paths:
         '500':
           $ref: '#/components/responses/UpstreamError'
 
+  # --- Action Endpoints ---
   /datp/upload:
     post:
+      tags: [Action]
       summary: Upload IOC to Microsoft Defender (DATP)
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -90,7 +90,10 @@ paths:
 
   /azuread/blockip:
     post:
+      tags: [Action]
       summary: Block IP in Azure AD Named Location
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -111,7 +114,10 @@ paths:
 
   /sase/block:
     post:
+      tags: [Action]
       summary: Block IOC in SASE (Umbrella)
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -129,6 +135,21 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  # --- Utility Endpoints ---
+  /:
+    get:
+      tags: [Utility]
+      summary: Health check
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
 
 components:
   securitySchemes:
