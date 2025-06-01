@@ -1,11 +1,20 @@
-openapi: 3.1.0
+openapi: 3.0.3
 info:
   title: SOAR API
   version: 1.0.0
-  description: API for SOAR enrichment and response automation
+  description: |
+    The SOAR API provides enrichment and response automation for security operations. It enables threat intelligence lookups, automated blocking actions, and utility endpoints for health monitoring. All endpoints require JWT authentication.
 
 servers:
-  - url: https://m86hizeep0.execute-api.ap-southeast-2.amazonaws.com/core/ # Typically replaced with your deployed API Gateway URL
+  - url: https://m86hizeep0.execute-api.ap-southeast-2.amazonaws.com/core/
+
+tags:
+  - name: Enrichment
+    description: Endpoints for threat intelligence and IOC enrichment.
+  - name: Action
+    description: Endpoints for automated response and blocking actions.
+  - name: Utility
+    description: Utility endpoints for health checks and diagnostics.
 
 paths:
   # --- Enrichment Endpoints ---
@@ -13,6 +22,9 @@ paths:
     get:
       tags: [Enrichment]
       summary: Lookup IP in AbuseIPDB
+      description: |
+        Checks the specified IP address against AbuseIPDB for reputation, report count, and Tor status.
+      operationId: getAbuseIpdb
       security:
         - bearerAuth: []
       parameters:
@@ -21,7 +33,7 @@ paths:
           schema:
             type: string
           required: true
-          description: IP address to check
+          description: IP address to check (IPv4 or IPv6)
       responses:
         '200':
           description: AbuseIPDB lookup result
@@ -40,6 +52,9 @@ paths:
     get:
       tags: [Enrichment]
       summary: Lookup IOC in Anomali ThreatStream
+      description: |
+        Looks up an Indicator of Compromise (IOC) in Anomali ThreatStream and returns confidence and type information.
+      operationId: getAnomali
       security:
         - bearerAuth: []
       parameters:
@@ -48,7 +63,7 @@ paths:
           schema:
             type: string
           required: true
-          description: Indicator of Compromise (IOC) to check
+          description: Indicator of Compromise (IOC) to check (IP, domain, or hash)
       responses:
         '200':
           description: Anomali lookup result
@@ -68,6 +83,9 @@ paths:
     post:
       tags: [Action]
       summary: Upload IOC to Microsoft Defender (DATP)
+      description: |
+        Uploads an IOC to Microsoft Defender Threat Protection (DATP) for automated blocking or auditing.
+      operationId: postDatpUpload
       security:
         - bearerAuth: []
       requestBody:
@@ -87,11 +105,16 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/UpstreamError'
 
   /azuread/blockip:
     post:
       tags: [Action]
       summary: Block IP in Azure AD Named Location
+      description: |
+        Blocks the specified IP address in an Azure AD Named Location list for conditional access policies.
+      operationId: postAzureAdBlockIp
       security:
         - bearerAuth: []
       requestBody:
@@ -111,11 +134,16 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/UpstreamError'
 
   /sase/block:
     post:
       tags: [Action]
       summary: Block IOC in SASE (Umbrella)
+      description: |
+        Blocks an IOC (IP, domain, or URL) in Cisco Umbrella SASE for network-wide enforcement.
+      operationId: postSaseBlock
       security:
         - bearerAuth: []
       requestBody:
@@ -135,12 +163,17 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/UpstreamError'
 
   # --- Utility Endpoints ---
   /:
     get:
       tags: [Utility]
       summary: Health check
+      description: |
+        Returns a simple health check message to verify the API is running and authenticated.
+      operationId: getHealth
       security:
         - bearerAuth: []
       responses:
@@ -150,6 +183,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+        '500':
+          $ref: '#/components/responses/UpstreamError'
 
 components:
   securitySchemes:
@@ -175,7 +210,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     UpstreamError:
-      description: Upstream API issue
+      description: Upstream API issue or internal server error
       content:
         application/json:
           schema:
@@ -184,6 +219,7 @@ components:
   schemas:
     HealthResponse:
       type: object
+      description: Health check response
       properties:
         message:
           type: string
@@ -195,13 +231,13 @@ components:
       properties:
         Confidence:
           type: integer
-          description: Abuse confidence score
+          description: Abuse confidence score (0-100)
         Country:
           type: string
-          description: Country name
+          description: Country name of the IP
         ReportCount:
           type: integer
-          description: Number of reports
+          description: Number of abuse reports
         Tor:
           type: boolean
           description: Whether the IP is a Tor exit node
@@ -218,10 +254,10 @@ components:
       properties:
         Confidence:
           type: integer
-          description: Average confidence score
+          description: Average confidence score (0-100)
         IOCType:
           type: string
-          description: Type of Indicator of Compromise
+          description: Type of Indicator of Compromise (e.g., IP, domain, hash)
         IOC:
           type: string
           description: The IOC queried
@@ -231,17 +267,18 @@ components:
 
     DatpUploadRequest:
       type: object
+      description: Request to upload an IOC to Microsoft Defender (DATP)
       properties:
         ioc:
           type: string
-          description: Indicator of Compromise
+          description: Indicator of Compromise (IP, domain, or hash)
         action:
           type: string
           enum: [Block, Audit, BlockAndRemediate]
-          description: Action to take
+          description: Action to take in DATP
         incident_id:
           type: string
-          description: Incident ID
+          description: Incident ID for tracking
       required: [ioc, action, incident_id]
 
     DatpUploadResponse:
@@ -263,6 +300,7 @@ components:
 
     AzureAdBlockIpRequest:
       type: object
+      description: Request to block an IP in Azure AD Named Location
       properties:
         ioc:
           type: string
@@ -275,7 +313,7 @@ components:
           description: Named location list name
         incident_id:
           type: string
-          description: Incident ID
+          description: Incident ID for tracking
       required: [ioc, list_id, list_name, incident_id]
 
     AzureAdBlockIpResponse:
@@ -294,13 +332,14 @@ components:
 
     SaseBlockRequest:
       type: object
+      description: Request to block an IOC in SASE (Umbrella)
       properties:
         ioc:
           type: string
-          description: Indicator of Compromise
+          description: Indicator of Compromise (IP, domain, or URL)
         incident_id:
           type: string
-          description: Incident ID
+          description: Incident ID for tracking
       required: [ioc, incident_id]
 
     SaseBlockResponse:
@@ -322,6 +361,7 @@ components:
 
     ErrorResponse:
       type: object
+      description: Error response schema
       properties:
         error:
           type: string
