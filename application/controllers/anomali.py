@@ -11,6 +11,7 @@ TABLE = os.getenv("TABLE")
 PARTITION_KEY = os.getenv("PARTITION_KEY")
 SORT_KEY = os.getenv("SORT_KEY")
 
+
 class Anomali:
     @classmethod
     def ioc_lookup(cls, ioc: str) -> dict:
@@ -145,7 +146,7 @@ class Anomali:
                     "Confidence": average_confidence,
                     "IOCType": ioc_type,
                     "IOC": ioc,
-                    "Grade": grade_confidence
+                    "Grade": grade_confidence,
                 }
             if retry_count == max_retries:
                 current_app.logger.error(

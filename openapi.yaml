@@ -67,27 +67,6 @@ paths:
         '500':
           $ref: '#/components/responses/UpstreamError'
 
-  /urlscan:
-    post:
-      summary: Scan a URL with URLScan
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UrlScanRequest'
-      responses:
-        '200':
-          description: URLScan result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UrlScanResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
   /datp/upload:
     post:
       summary: Upload IOC to Microsoft Defender (DATP)
@@ -157,6 +136,9 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        Enter your OAuth 2.0 Bearer token in the format: `Bearer <access_token>`.
+        This API requires a valid OAuth 2.0 access token for all endpoints.
 
   responses:
     BadRequest:
@@ -190,36 +172,41 @@ components:
       type: object
       description: AbuseIPDB lookup result
       properties:
-        data:
-          type: object
-          description: AbuseIPDB data
+        Confidence:
+          type: integer
+          description: Abuse confidence score
+        Country:
+          type: string
+          description: Country name
+        ReportCount:
+          type: integer
+          description: Number of reports
+        Tor:
+          type: boolean
+          description: Whether the IP is a Tor exit node
+        IOC:
+          type: string
+          description: The IP address queried
+        Private:
+          type: boolean
+          description: Whether the IP is private
 
     AnomaliResponse:
       type: object
       description: Anomali lookup result
       properties:
-        data:
-          type: object
-          description: Anomali data
-
-    UrlScanRequest:
-      type: object
-      properties:
-        ioc:
+        Confidence:
+          type: integer
+          description: Average confidence score
+        IOCType:
           type: string
-          description: URL to scan
-        incident_id:
+          description: Type of Indicator of Compromise
+        IOC:
           type: string
-          description: Incident ID
-      required: [ioc, incident_id]
-
-    UrlScanResponse:
-      type: object
-      description: URLScan result
-      properties:
-        data:
-          type: object
-          description: URLScan data
+          description: The IOC queried
+        Grade:
+          type: string
+          description: Confidence grade (Low, Medium, High)
 
     DatpUploadRequest:
       type: object
@@ -240,9 +227,18 @@ components:
       type: object
       description: DATP upload result
       properties:
-        data:
-          type: object
-          description: DATP upload data
+        Added:
+          type: boolean
+          description: Whether the IOC was added to DATP
+        IOC:
+          type: string
+          description: Indicator of Compromise
+        Platform:
+          type: string
+          description: Platform name (e.g., DATP)
+        Action:
+          type: string
+          description: Action taken (e.g., Block, None)
 
     AzureAdBlockIpRequest:
       type: object
@@ -265,9 +261,15 @@ components:
       type: object
       description: Azure AD block result
       properties:
-        data:
-          type: object
-          description: Azure AD block data
+        Action:
+          type: boolean
+          description: Whether the block action was successful
+        IOC:
+          type: string
+          description: The IP address (IOC) attempted to block
+        ListName:
+          type: string
+          description: The Azure AD Named Location list name
 
     SaseBlockRequest:
       type: object
@@ -284,9 +286,18 @@ components:
       type: object
       description: SASE block result
       properties:
-        data:
-          type: object
-          description: SASE block data
+        Added:
+          type: boolean
+          description: Whether the IOC was added to SASE
+        IOC:
+          type: string
+          description: Indicator of Compromise
+        Platform:
+          type: string
+          description: Platform name (e.g., SASE)
+        Action:
+          type: string
+          description: Action taken (e.g., Block)
 
     ErrorResponse:
       type: object

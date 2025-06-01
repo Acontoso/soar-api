@@ -14,6 +14,7 @@ REGION = "ap-southeast-2"
 def generate_short_uuid():
     return str(uuid.uuid4())[:8]
 
+
 class Defender:
     @classmethod
     def upload(cls, ioc: str, type: str, action: str, incident_id: str) -> bool:
@@ -94,7 +95,6 @@ class Defender:
             "[-] Failed to get access token from Azure AD after multiple retries"
         )
         return None
-
 
     @classmethod
     def check_indicator(cls, indicator: str, token: str) -> bool:

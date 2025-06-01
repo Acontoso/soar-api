@@ -8,9 +8,10 @@ import json
 TENANT_ID = os.getenv("TENANT_ID")
 REGION = "ap-southeast-2"
 
+
 class Azure:
     @classmethod
-    def az_ad_list_upload(cls, ioc: str, list_id:str, list_name: str) -> bool:
+    def az_ad_list_upload(cls, ioc: str, list_id: str, list_name: str) -> bool:
         if not all([ioc, list_id, list_name]):
             current_app.logger.error("One or more required parameters are empty.")
             return False
@@ -19,13 +20,13 @@ class Azure:
             "@odata.type": "#microsoft.graph.ipNamedLocation",
             "displayName": list_name,
             "isTrusted": False,
-            "ipRanges": []
+            "ipRanges": [],
         }
         token = cls.access_token_graph_api()
         if token:
             header = {
                 "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
             data = {"@odata.type": "#microsoft.graph.iPv4CidrRange", "cidrAddress": ioc}
             payload["ipRanges"].append(data)
@@ -38,7 +39,9 @@ class Azure:
                 payload["ipRanges"].extend(ip_ranges)
             else:
                 return False
-            response = requests.patch(url=endpoint, headers=header, data=json.dumps(payload))
+            response = requests.patch(
+                url=endpoint, headers=header, data=json.dumps(payload)
+            )
             if response.status_code == 204:
                 current_app.logger.info(
                     f"[+] Successfully added IP {ioc} to Azure AD list {list_name}"
@@ -81,9 +84,7 @@ class Azure:
         scope = "https://graph.microsoft.com/.default"
         max_retries = 3
         retry_count = 0
-        payload = cls.generate_access_token_payload(
-            client_id, client_secret, scope
-        )
+        payload = cls.generate_access_token_payload(client_id, client_secret, scope)
         endpoint = (
             "https://login.microsoftonline.com/" + TENANT_ID + "/oauth2/v2.0/token"
         )

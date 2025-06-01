@@ -4,7 +4,8 @@ from typing import Optional
 from flask import current_app
 from boto3.dynamodb.types import TypeDeserializer
 
-#boto3.setup_default_session(profile_name='sec-log')
+
+# boto3.setup_default_session(profile_name='sec-log')
 class CustomTypeDeserializer(TypeDeserializer):
     def deserialize(self, value):
         # If it's a number, convert it to an integer or float - similar to .Net virtual methods that is overidden by derived class
@@ -29,7 +30,9 @@ class DynamoDBService:
     ) -> Optional[dict]:
         """Get item from DynamoDB table"""
         if not all([table, table, hash_key, hash_key_value, sort_key, sort_key_value]):
-            current_app.logger.error("One or more required parameters are empty when calling put_item.")
+            current_app.logger.error(
+                "One or more required parameters are empty when calling put_item."
+            )
             return None
         response = self.dynamodb_client.get_item(
             TableName=table,
@@ -49,7 +52,9 @@ class DynamoDBService:
         """Put item into DynamoDB table"""
         try:
             if not all([table, item]):
-                current_app.logger.error("One or more required parameters are empty when calling put_item.")
+                current_app.logger.error(
+                    "One or more required parameters are empty when calling put_item."
+                )
                 return
             self.dynamodb_client.put_item(TableName=table, Item=item)
             current_app.logger.error(f"[+] Successful Database write on {table}")
@@ -84,9 +89,7 @@ class SSMServices:
             current_app.logger.error(
                 "[-] Failed to retrieve the parameter from SSM, returning null"
             )
-            current_app.logger.error(
-                error
-            )
+            current_app.logger.error(error)
             return None
         return unencrypted_string
 

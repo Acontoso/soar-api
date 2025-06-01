@@ -13,18 +13,22 @@ VALID_ACTIONS = [
     "BlockAndRemediate",
 ]
 
+
 def init_routes(app: Flask):
     @app.route("/")
     def home():
         return jsonify({"message": "API is healthy!"})
-    
+
     @app.errorhandler(500)
     def internal_error(error):
         return {"error": "Internal Server Error", "message": str(error)}, 500
 
     @app.errorhandler(404)
     def not_found_error(error):
-        return {"error": "Not Found", "message": "The requested resource was not found."}, 404
+        return {
+            "error": "Not Found",
+            "message": "The requested resource was not found.",
+        }, 404
 
     @app.route("/ipabusedb", methods=["GET"])
     def ipabuse_path():
@@ -57,7 +61,9 @@ def init_routes(app: Flask):
                     return response
             else:
                 response = jsonify(
-                    {"error": "More than one argument sent, please only send the ip param"}
+                    {
+                        "error": "More than one argument sent, please only send the ip param"
+                    }
                 )
                 response.status_code = 400
                 return response
@@ -94,7 +100,9 @@ def init_routes(app: Flask):
                     return response
             else:
                 response = jsonify(
-                    {"error": "More than one argument sent, please only send the ioc param"}
+                    {
+                        "error": "More than one argument sent, please only send the ioc param"
+                    }
                 )
                 response.status_code = 400
                 return response

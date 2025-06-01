@@ -10,6 +10,7 @@ ACTION_TABLE = os.getenv("ACTION_TABLE")
 ACTION_PARTITION_KEY = os.getenv("ACTION_PARTITION_KEY")
 ACTION_SORT_KEY = os.getenv("ACTION_SORT_KEY")
 
+
 class DATP:
     @classmethod
     def ioc_upload(cls, ioc: str, action: str, incident_id: str) -> dict:
@@ -71,7 +72,9 @@ class DATP:
         return "DomainName"
 
     @classmethod
-    def add_record_to_db(cls, ioc: str, ioc_type: str, action: str, incident_id: str) -> None:
+    def add_record_to_db(
+        cls, ioc: str, ioc_type: str, action: str, incident_id: str
+    ) -> None:
         dynamo = DynamoDBService(REGION)
         current_date = datetime.now().strftime("%d-%m-%Y")
         current_app.logger.info(f"[+] Attempting to write to DB, IOC: {ioc}")

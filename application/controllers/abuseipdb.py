@@ -11,6 +11,7 @@ TABLE = os.getenv("TABLE")
 PARTITION_KEY = os.getenv("PARTITION_KEY")
 SORT_KEY = os.getenv("SORT_KEY")
 
+
 class IPAbuseDB:
     @classmethod
     def ip_lookup(cls, ip: str) -> dict:

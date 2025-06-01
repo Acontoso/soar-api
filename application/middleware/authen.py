@@ -4,9 +4,10 @@ import flask
 import jwt
 import jwt.algorithms
 
-#Auth is done at the API gateway. Since its a proxy integration to lambda where lambda function handles routing, there needs to be scope checks configured... Done at later date
-#Below code works and successfully validates the token
+# Auth is done at the API gateway. Since its a proxy integration to lambda where lambda function handles routing, there needs to be scope checks configured... Done at later date
+# Below code works and successfully validates the token
 COGNITO_ID = "ap-southeast-2_jL1tizlq8"
+
 
 def get_jwk(kid) -> str:
     """Fetch the JWKs and return the matching key by kid"""
@@ -18,6 +19,7 @@ def get_jwk(kid) -> str:
         if key["kid"] == kid:
             return key
     raise ValueError("Unable to find the appropriate key")
+
 
 def verify_jwt(request: flask.Request):
     """Verify the JWT token using the appropriate public key from Cognito"""
@@ -43,7 +45,9 @@ def verify_jwt(request: flask.Request):
             issuer=f"https://cognito-idp.ap-southeast-2.amazonaws.com/{COGNITO_ID}",
         )
         g.token = payload
-        current_app.logger.info(f"[+] Authorization token is valid, proceeding with request")
+        current_app.logger.info(
+            f"[+] Authorization token is valid, proceeding with request"
+        )
         g.client_id = payload.get("client_id")
     except jwt.ExpiredSignatureError:
         response = jsonify({"error": "JWT token is expired"})

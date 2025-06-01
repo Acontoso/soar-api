@@ -10,9 +10,12 @@ ACTION_TABLE = os.getenv("ACTION_TABLE")
 ACTION_PARTITION_KEY = os.getenv("ACTION_PARTITION_KEY")
 ACTION_SORT_KEY = os.getenv("ACTION_SORT_KEY")
 
+
 class AzureAD:
     @classmethod
-    def ip_upload(cls, ioc: str, list_id: str, list_name: str, incident_id: str) -> dict:
+    def ip_upload(
+        cls, ioc: str, list_id: str, list_name: str, incident_id: str
+    ) -> dict:
         ip_result = cls.is_cidr(ioc)
         if ip_result is None:
             current_app.logger.error(f"[-] Invalid IP address {ioc}")
@@ -30,21 +33,15 @@ class AzureAD:
             result = cls.add_to_list(ioc, list_id, list_name)
             if result:
                 cls.add_record_to_db(ioc, list_id, list_name, incident_id)
-                data = {
-                    "Action": True,
-                    "IOC": ioc,
-                    "ListName": list_name
-                }
+                data = {"Action": True, "IOC": ioc, "ListName": list_name}
             else:
-                data = {
-                    "Action": False,
-                    "IOC": ioc,
-                    "ListName": list_name
-                }
+                data = {"Action": False, "IOC": ioc, "ListName": list_name}
         return data
 
     @classmethod
-    def add_record_to_db(cls, ioc: str, list_id: str, list_name: str, incident_id: str) -> None:
+    def add_record_to_db(
+        cls, ioc: str, list_id: str, list_name: str, incident_id: str
+    ) -> None:
         dynamo = DynamoDBService(REGION)
         current_date = datetime.now().strftime("%d-%m-%Y")
         current_app.logger.info(f"[+] Attempting to write to DB, IOC: {ioc}")
@@ -56,7 +53,7 @@ class AzureAD:
             "IncidentId": {"S": incident_id},
             "Date": {"S": current_date},
             "ListName": {"S": list_name},
-            "ListID": {"S": list_id}
+            "ListID": {"S": list_id},
         }
         dynamo.put_item(ACTION_TABLE, item)
 
@@ -73,7 +70,7 @@ class AzureAD:
             ACTION_SORT_KEY,
             sort_key_value,
         )
-    
+
     @staticmethod
     def get_ssm_api_key() -> str:
         ssm = SSMServices(REGION)
@@ -86,15 +83,15 @@ class AzureAD:
     @classmethod
     def add_to_list(cls, ioc: str, list_id: str, list_name: str) -> bool:
         return Azure.az_ad_list_upload(ioc, list_id, list_name)
- 
+
     @staticmethod
     def is_cidr(ip_str):
         try:
-            if '/' in ip_str:
+            if "/" in ip_str:
                 ipaddress.ip_network(ip_str, strict=False)
                 return True
             else:
                 ipaddress.ip_address(ip_str)
                 return False
         except ValueError:
-            return None 
+            return None

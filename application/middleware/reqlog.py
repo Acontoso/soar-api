@@ -29,7 +29,7 @@ def after_request(response):
         "bytes_in": bytes_in,
         "bytes_out": bytes_out,
         "args_size_bytes": g.args_size,
-        "client": g.client_id
+        "client": g.client_id,
     }
     access_logger.info("Request processed", extra=extra)
     return response

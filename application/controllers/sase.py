@@ -11,6 +11,7 @@ ACTION_TABLE = os.getenv("ACTION_TABLE")
 ACTION_PARTITION_KEY = os.getenv("ACTION_PARTITION_KEY")
 ACTION_SORT_KEY = os.getenv("ACTION_SORT_KEY")
 
+
 class SASE:
     @classmethod
     def block(cls, ioc: str, incident_id: str) -> dict:
@@ -26,13 +27,28 @@ class SASE:
             if ioc_type == "IPv4":
                 ip_obj = ipaddress.ip_address(ioc)
                 if ip_obj.is_private:
-                    return {"Added": False, "IOC": ioc, "Platform": "SASE", "Action": "Block"}
+                    return {
+                        "Added": False,
+                        "IOC": ioc,
+                        "Platform": "SASE",
+                        "Action": "Block",
+                    }
             operation = Umbrella.upload(ioc, incident_id)
             if operation:
                 cls.add_record_to_db(ioc, ioc_type)
-                return {"Added": True, "IOC": ioc, "Platform": "SASE", "Action": "Block"}
+                return {
+                    "Added": True,
+                    "IOC": ioc,
+                    "Platform": "SASE",
+                    "Action": "Block",
+                }
             else:
-                return {"Added": False, "IOC": ioc, "Platform": "SASE", "Action": "Block"}
+                return {
+                    "Added": False,
+                    "IOC": ioc,
+                    "Platform": "SASE",
+                    "Action": "Block",
+                }
 
     @staticmethod
     def ioc_type_finder(ioc: str) -> str:
@@ -77,5 +93,9 @@ class SASE:
             f"[+] Looking to see if record exists for table {ACTION_TABLE} where IOC primary key {hash_key_value}"
         )
         return dynamo.get_item(
-            ACTION_TABLE, ACTION_PARTITION_KEY, hash_key_value, ACTION_SORT_KEY, sort_key_value
+            ACTION_TABLE,
+            ACTION_PARTITION_KEY,
+            hash_key_value,
+            ACTION_SORT_KEY,
+            sort_key_value,
         )

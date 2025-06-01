@@ -43,4 +43,3 @@ python -W ignore -m unittest discover -s tests
 - Infrastructure as Code is provided in the `terraform/` directory for AWS deployment.
 
 ---
-
