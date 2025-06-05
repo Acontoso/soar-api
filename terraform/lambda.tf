@@ -1,3 +1,13 @@
+resource "null_resource" "upload_lambda_zip" {
+  triggers = {
+    always_run = timestamp()
+  }
+  depends_on = [data.archive_file.code]
+  provisioner "local-exec" {
+    command = "aws s3 cp ${path.root}/terraform/application.zip s3://${data.aws_s3_bucket.artefact_bucket.id}/application.zip"
+  }
+}
+
 resource "aws_lambda_function" "lambda" {
   #checkov:skip=CKV_AWS_117: "Ensure that AWS Lambda function is configured inside a VPC"
   #checkov:skip=CKV_AWS_272: "Ensure AWS Lambda function is configured to validate code-signing"
@@ -7,14 +17,15 @@ resource "aws_lambda_function" "lambda" {
   #checkov:skip=CKV_AWS_173: "Check encryption settings for Lambda environmental variable"
   function_name    = var.lambda_function_name
   role             = aws_iam_role.lambda_role.arn
-  filename         = data.archive_file.code.output_path
-  source_code_hash = data.archive_file.code.output_base64sha256
-  handler          = var.handler
-  runtime          = var.runtime
-  memory_size      = var.memory_size
-  tags             = local.tags
-  timeout          = var.timeout
-  description      = var.description
+  s3_bucket         = data.aws_s3_bucket.artefact_bucket.id
+  s3_key            = "application.zip"
+  handler           = var.handler
+  runtime           = var.runtime
+  memory_size       = var.memory_size
+  tags              = local.tags
+  timeout           = var.timeout
+  description       = var.description
+  source_code_hash  = data.aws_s3_object.lambda_zip.etag
   logging_config {
     log_format = "JSON"
   }
@@ -29,6 +40,7 @@ resource "aws_lambda_function" "lambda" {
       "TENANT_ID"            = var.ms_tenant_id
     }
   }
+  depends_on = [null_resource.upload_lambda_zip]
 }
 
 resource "null_resource" "pip_install" {
@@ -37,14 +49,15 @@ resource "null_resource" "pip_install" {
   }
 
   provisioner "local-exec" {
-    command = "python3 -m pip install -r ${path.module}/../requirements.txt -t ${path.module}/../application && python3 -m pip install --platform manylinux2014_x86_64 --implementation cp --python-version 3.11 --only-binary=:all: --upgrade cryptography -t ${path.module}/../application"
+    command = "python3 -m pip install -r ${path.module}/../requirements.txt -t ${path.module}/../ && python3 -m pip install --platform manylinux2014_x86_64 --implementation cp --python-version 3.11 --only-binary=:all: --upgrade cryptography -t ${path.module}/../"
   }
 }
 
 data "archive_file" "code" {
   type        = "zip"
-  source_dir  = "${path.module}/../application"
-  output_path = "${path.module}/../application.zip"
+  source_dir  = "${path.module}/.." # Use parent dir so application/ is at root
+  output_path = "${path.root}/terraform/application.zip" # Use absolute path for CI/CD reliability
+  excludes    = ["env/*", "terraform/*","workloads/*", "README.md" ,"tests/*", "*.pyc", "__pycache__/*", "openapi.yaml", ".git/*", ".gitignore"]
   depends_on  = [null_resource.pip_install]
 }
 
@@ -155,4 +168,11 @@ resource "aws_lambda_permission" "api_gateway_trigger" {
   function_name = aws_lambda_function.lambda.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.gateway_object.execution_arn}/*/*/*" #All methods and stages
+}
+
+resource "null_resource" "check_zip" {
+  depends_on = [data.archive_file.code]
+  provisioner "local-exec" {
+    command = "ls -lh ${path.root}/terraform/application.zip && unzip -l ${path.root}/terraform/application.zip"
+  }
 }
