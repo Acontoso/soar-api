@@ -2,19 +2,10 @@ openapi: 3.0.3
 info:
   title: SOAR API
   version: 1.0.0
-  description: |
-    The SOAR API provides enrichment and response automation for security operations. It enables threat intelligence lookups, automated blocking actions, and utility endpoints for health monitoring. All endpoints require JWT authentication.
+  description: API for SOAR enrichment and response automation
 
 servers:
-  - url: https://m86hizeep0.execute-api.ap-southeast-2.amazonaws.com/core/
-
-tags:
-  - name: Enrichment
-    description: Endpoints for threat intelligence and IOC enrichment.
-  - name: Action
-    description: Endpoints for automated response and blocking actions.
-  - name: Utility
-    description: Utility endpoints for health checks and diagnostics.
+  - url: https://m86hizeep0.execute-api.ap-southeast-2.amazonaws.com/core/ # Typically replaced with your deployed API Gateway URL
 
 paths:
   # --- Enrichment Endpoints ---
@@ -22,9 +13,6 @@ paths:
     get:
       tags: [Enrichment]
       summary: Lookup IP in AbuseIPDB
-      description: |
-        Checks the specified IP address against AbuseIPDB for reputation, report count, and Tor status.
-      operationId: getAbuseIpdb
       security:
         - bearerAuth: []
       parameters:
@@ -33,7 +21,7 @@ paths:
           schema:
             type: string
           required: true
-          description: IP address to check (IPv4 or IPv6)
+          description: IP address to check
       responses:
         '200':
           description: AbuseIPDB lookup result
@@ -52,9 +40,6 @@ paths:
     get:
       tags: [Enrichment]
       summary: Lookup IOC in Anomali ThreatStream
-      description: |
-        Looks up an Indicator of Compromise (IOC) in Anomali ThreatStream and returns confidence and type information.
-      operationId: getAnomali
       security:
         - bearerAuth: []
       parameters:
@@ -63,7 +48,7 @@ paths:
           schema:
             type: string
           required: true
-          description: Indicator of Compromise (IOC) to check (IP, domain, or hash)
+          description: Indicator of Compromise (IOC) to check
       responses:
         '200':
           description: Anomali lookup result
@@ -83,9 +68,6 @@ paths:
     post:
       tags: [Action]
       summary: Upload IOC to Microsoft Defender (DATP)
-      description: |
-        Uploads an IOC to Microsoft Defender Threat Protection (DATP) for automated blocking or auditing.
-      operationId: postDatpUpload
       security:
         - bearerAuth: []
       requestBody:
@@ -105,16 +87,11 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/UpstreamError'
 
   /azuread/blockip:
     post:
       tags: [Action]
       summary: Block IP in Azure AD Named Location
-      description: |
-        Blocks the specified IP address in an Azure AD Named Location list for conditional access policies.
-      operationId: postAzureAdBlockIp
       security:
         - bearerAuth: []
       requestBody:
@@ -134,16 +111,11 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/UpstreamError'
 
   /sase/block:
     post:
       tags: [Action]
       summary: Block IOC in SASE (Umbrella)
-      description: |
-        Blocks an IOC (IP, domain, or URL) in Cisco Umbrella SASE for network-wide enforcement.
-      operationId: postSaseBlock
       security:
         - bearerAuth: []
       requestBody:
@@ -163,17 +135,73 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/UpstreamError'
+
+  /sase/submit:
+    post:
+      tags: [Action]
+      summary: Submit file to SASE sandbox
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File to be analyzed
+              required:
+                - file
+      responses:
+        '200':
+          description: SASE file submission result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaseSubmitResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /sase/urlcategory:
+    post:
+      tags: [Action]
+      summary: Lookup URL category in SASE
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ioc:
+                  type: string
+                  description: Indicator of Compromise (URL or domain)
+              required:
+                - ioc
+      responses:
+        '200':
+          description: SASE URL category lookup result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaseUrlCategoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   # --- Utility Endpoints ---
   /:
     get:
       tags: [Utility]
       summary: Health check
-      description: |
-        Returns a simple health check message to verify the API is running and authenticated.
-      operationId: getHealth
       security:
         - bearerAuth: []
       responses:
@@ -183,8 +211,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
-        '500':
-          $ref: '#/components/responses/UpstreamError'
 
 components:
   securitySchemes:
@@ -210,7 +236,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     UpstreamError:
-      description: Upstream API issue or internal server error
+      description: Upstream API issue
       content:
         application/json:
           schema:
@@ -219,7 +245,6 @@ components:
   schemas:
     HealthResponse:
       type: object
-      description: Health check response
       properties:
         message:
           type: string
@@ -231,13 +256,13 @@ components:
       properties:
         Confidence:
           type: integer
-          description: Abuse confidence score (0-100)
+          description: Abuse confidence score
         Country:
           type: string
-          description: Country name of the IP
+          description: Country name
         ReportCount:
           type: integer
-          description: Number of abuse reports
+          description: Number of reports
         Tor:
           type: boolean
           description: Whether the IP is a Tor exit node
@@ -254,10 +279,10 @@ components:
       properties:
         Confidence:
           type: integer
-          description: Average confidence score (0-100)
+          description: Average confidence score
         IOCType:
           type: string
-          description: Type of Indicator of Compromise (e.g., IP, domain, hash)
+          description: Type of Indicator of Compromise
         IOC:
           type: string
           description: The IOC queried
@@ -267,18 +292,17 @@ components:
 
     DatpUploadRequest:
       type: object
-      description: Request to upload an IOC to Microsoft Defender (DATP)
       properties:
         ioc:
           type: string
-          description: Indicator of Compromise (IP, domain, or hash)
+          description: Indicator of Compromise
         action:
           type: string
           enum: [Block, Audit, BlockAndRemediate]
-          description: Action to take in DATP
+          description: Action to take
         incident_id:
           type: string
-          description: Incident ID for tracking
+          description: Incident ID
       required: [ioc, action, incident_id]
 
     DatpUploadResponse:
@@ -300,7 +324,6 @@ components:
 
     AzureAdBlockIpRequest:
       type: object
-      description: Request to block an IP in Azure AD Named Location
       properties:
         ioc:
           type: string
@@ -313,7 +336,7 @@ components:
           description: Named location list name
         incident_id:
           type: string
-          description: Incident ID for tracking
+          description: Incident ID
       required: [ioc, list_id, list_name, incident_id]
 
     AzureAdBlockIpResponse:
@@ -332,14 +355,13 @@ components:
 
     SaseBlockRequest:
       type: object
-      description: Request to block an IOC in SASE (Umbrella)
       properties:
         ioc:
           type: string
-          description: Indicator of Compromise (IP, domain, or URL)
+          description: Indicator of Compromise
         incident_id:
           type: string
-          description: Incident ID for tracking
+          description: Incident ID
       required: [ioc, incident_id]
 
     SaseBlockResponse:
@@ -359,9 +381,47 @@ components:
           type: string
           description: Action taken (e.g., Block)
 
+    SaseSubmitResponse:
+      type: object
+      description: SASE file submission result
+      properties:
+        MD5:
+          type: string
+          description: MD5 hash of the submitted file
+        Status:
+          type: string
+          description: Sandbox submission status
+        VirusName:
+          type: string
+          description: Name of detected virus (if any)
+        VirusType:
+          type: string
+          description: Type of detected virus (if any)
+        Sandbox:
+          type: boolean
+          description: Whether sandboxing was performed
+        StatusCode:
+          type: integer
+          description: Status code from sandbox service
+
+    SaseUrlCategoryResponse:
+      type: object
+      description: SASE URL category lookup result
+      properties:
+        Categories:
+          type: array
+          items:
+            type: string
+          description: List of categories for the URL/IOC
+        IOC:
+          type: string
+          description: The IOC queried
+        LookupSuccess:
+          type: boolean
+          description: Whether the lookup was successful
+
     ErrorResponse:
       type: object
-      description: Error response schema
       properties:
         error:
           type: string
