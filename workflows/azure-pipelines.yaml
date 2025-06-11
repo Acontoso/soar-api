@@ -6,7 +6,7 @@ trigger:
 pr: none
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: ubuntu-22.04
 
 variables:
   aws.rolecredential.maxduration: '3600'
@@ -34,3 +34,48 @@ stages:
                 terraform init
                 terraform apply -auto-approve -input=false
               workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'Weshealth-Security-RG'
+              scriptType: 'bash'
+              scriptLocation: 'scriptPath'
+              scriptPath: '$(System.DefaultWorkingDirectory)/post-deployment.sh'
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'Weshealth-Security-RG'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                commit_sha=$(Build.SourceVersion)
+                az keyvault secret set --vault-name "WesHealth-Security-KV" --name "soar-api-known-good-commit" --value "$commit_sha"
+              workingDirectory: '$(System.DefaultWorkingDirectory)'
+              failOnStandardError: true
+
+- stage: Rollback
+  dependsOn: TerraformDeploy
+  condition: failed('TerraformDeploy')
+  jobs:
+  - job: RollbackJob
+    steps:
+    - checkout: self
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'Weshealth-Security-RG'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          commit_sha=$(az keyvault secret show --vault-name "WesHealth-Security-KV" --name "soar-api-known-good-commit" --query "value" -o tsv)
+          git checkout $commit_sha
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        failOnStandardError: true
+    - task: AWSShellScript@1
+      displayName: "Terraform Rollback"
+      inputs:
+        awsCredentials: "weshealth-seclog"
+        disableAutoCwd: true
+        regionName: "ap-southeast-2"
+        scriptType: inline
+        inlineScript: |
+          terraform init
+          terraform apply -auto-approve -input=false
+        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
