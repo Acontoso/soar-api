@@ -198,7 +198,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   # --- Utility Endpoints ---
-  /:
+  /health:
     get:
       tags: [Utility]
       summary: Health check
