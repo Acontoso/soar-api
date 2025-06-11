@@ -15,7 +15,7 @@ VALID_ACTIONS = [
 
 
 def init_routes(app: Flask):
-    @app.route("/")
+    @app.route("/health")
     def home():
         return jsonify({"message": "API is healthy!"})
 
@@ -200,6 +200,91 @@ def init_routes(app: Flask):
                 return jsonify(resp_data)
             else:
                 response = jsonify({"error": "Request must be JSON"})
+                response.status_code = 400
+                return response
+        else:
+            response = jsonify(
+                {"error": "Missing required scopes in access token in API call"}
+            )
+            response.status_code = 401
+            return response
+
+    @app.route("/sase/submit", methods=["POST"])
+    def sase_sandbox():
+        required_scopes = ["soar-api/admin.readwrite.all"]
+        if verify_scopes(g.token, required_scopes):
+            if 'file' in request.files:
+                try:
+                    uploaded_file = request.files['file']
+                    uploaded_file.seek(0, 2)  # Move to end of file
+                    file_size = uploaded_file.tell()
+                    uploaded_file.seek(0)     # Reset pointer to start
+                    if file_size > 2 * 1024 * 1024:
+                        response = jsonify({"error": "File size exceeds 2MB limit"})
+                        response.status_code = 400
+                        return response
+                    file_bytes = uploaded_file.read()
+                except Exception as error:
+                    print(error)
+                    response = jsonify(
+                        {
+                            "error": "Failed to unpack & deserialize submitted file"
+                        }
+                    )
+                    response.status_code = 400
+                    return response
+                result = SASE.submit_file(file_bytes)
+                if result.get("Sandbox") is False:
+                    response = jsonify(
+                        {
+                            "error": "Failed to submit file to SASE sandbox, please check the file type and size"
+                        }
+                    )
+                    response.status_code = 400
+                    return response
+                else:
+                    return jsonify(result)
+            else:
+                response = jsonify({"error": "Request must be contain file"})
+                response.status_code = 400
+                return response
+        else:
+            response = jsonify(
+                {"error": "Missing required scopes in access token in API call"}
+            )
+            response.status_code = 401
+            return response
+
+    @app.route("/sase/urlcategory", methods=["GET"])
+    def sase_urlcategory():
+        required_scopes = ["soar-api/admin.readwrite.all"]
+        if verify_scopes(g.token, required_scopes):
+            # Accepting only single IOC here per API call
+            if len(request.args) == 1:
+                param = request.args.to_dict()
+                ioc = param.get("ioc", None)
+                if ioc:
+                    data = SASE.url_category_lookup(ioc)
+                    if data:
+                        return jsonify(data)
+                    else:
+                        response = jsonify(
+                            {"error": "Upstream API issue, returning 500 error"}
+                        )
+                        response.status_code = 500
+                        return response
+                else:
+                    response = jsonify(
+                        {"error": "Missing ip uri param, please pass a IP address"}
+                    )
+                    response.status_code = 400
+                    return response
+            else:
+                response = jsonify(
+                    {
+                        "error": "More than one argument sent, please only send the ioc param"
+                    }
+                )
                 response.status_code = 400
                 return response
         else:
