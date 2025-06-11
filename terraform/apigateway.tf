@@ -9,6 +9,8 @@ resource "aws_api_gateway_rest_api" "gateway_object" {
 }
 
 resource "aws_api_gateway_resource" "proxy_resource" {
+  #When you define {proxy+}, it means that the API Gateway will match any path that comes after the base path, allowing for a flexible proxy setup.
+  #If you want to access the root path, you need to ensure that the root resource is defined correctly as its own resource like this one.
   rest_api_id = aws_api_gateway_rest_api.gateway_object.id
   parent_id   = aws_api_gateway_rest_api.gateway_object.root_resource_id
   path_part   = "{proxy+}"
@@ -69,7 +71,6 @@ resource "aws_api_gateway_usage_plan_key" "key_assign_usage_plan" {
 }
 
 resource "aws_api_gateway_api_key" "apikey_tf" {
-  #Will eventually be OpenID connect once operations in API become more serious
   name = "core-key"
 }
 
