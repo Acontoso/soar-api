@@ -57,7 +57,7 @@ class DynamoDBService:
                 )
                 return
             self.dynamodb_client.put_item(TableName=table, Item=item)
-            current_app.logger.error(f"[+] Successful Database write on {table}")
+            current_app.logger.info(f"[+] Successful Database write on {table}")
             return True
         except Exception as error:
             current_app.logger.error("[-] Failed to add record in database, no stress")
