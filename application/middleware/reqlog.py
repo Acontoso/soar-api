@@ -1,6 +1,7 @@
 from flask import request, g
 import time
 import urllib.parse
+import uuid
 from application.utils.logs import access_logger
 from application.middleware.authen import verify_jwt
 
@@ -14,6 +15,7 @@ def before_request():
     g.uri = request.url
     g.method = request.method
     g.args_size = len(urllib.parse.urlencode(request.args))
+    g.request_id = str(uuid.uuid4())
     verify_jwt(request)
 
 
@@ -30,6 +32,7 @@ def after_request(response):
         "bytes_out": bytes_out,
         "args_size_bytes": g.args_size,
         "client": g.client_id,
+        "request_id": g.request_id,
     }
     access_logger.info("Request processed", extra=extra)
     return response
