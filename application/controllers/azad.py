@@ -4,6 +4,7 @@ from application.services.azuread import Azure
 from flask import current_app
 from datetime import datetime
 import ipaddress
+from application.services.ioccheck import tenant_friendly_name
 
 REGION = "ap-southeast-2"
 ACTION_TABLE = os.getenv("ACTION_TABLE")
@@ -14,7 +15,7 @@ ACTION_SORT_KEY = os.getenv("ACTION_SORT_KEY")
 class AzureAD:
     @classmethod
     def ip_upload(
-        cls, ioc: str, list_id: str, list_name: str, incident_id: str
+        cls, ioc: str, list_id: str, list_name: str, incident_id: str, tenant_id: str
     ) -> dict:
         ip_result = cls.is_cidr(ioc)
         if ip_result is None:
@@ -30,9 +31,9 @@ class AzureAD:
             data = {"Action": True, "IOC": ioc, "ListName": list_name}
             return data
         else:
-            result = cls.add_to_list(ioc, list_id, list_name)
+            result = cls.add_to_list(ioc, list_id, list_name, tenant_id)
             if result:
-                cls.add_record_to_db(ioc, list_id, list_name, incident_id)
+                cls.add_record_to_db(ioc, list_id, list_name, incident_id, tenant_id)
                 data = {"Action": True, "IOC": ioc, "ListName": list_name}
             else:
                 data = {"Action": False, "IOC": ioc, "ListName": list_name}
@@ -40,7 +41,7 @@ class AzureAD:
 
     @classmethod
     def add_record_to_db(
-        cls, ioc: str, list_id: str, list_name: str, incident_id: str
+        cls, ioc: str, list_id: str, list_name: str, incident_id: str, tenant_id: str
     ) -> None:
         dynamo = DynamoDBService(REGION)
         current_date = datetime.now().strftime("%d-%m-%Y")
@@ -54,6 +55,8 @@ class AzureAD:
             "Date": {"S": current_date},
             "ListName": {"S": list_name},
             "ListID": {"S": list_id},
+            "TenantId": {"S": tenant_id},
+            "TenantFriendlyName": {"S": tenant_friendly_name(tenant_id)},
         }
         dynamo.put_item(ACTION_TABLE, item)
 
@@ -81,8 +84,10 @@ class AzureAD:
         return None
 
     @classmethod
-    def add_to_list(cls, ioc: str, list_id: str, list_name: str) -> bool:
-        return Azure.az_ad_list_upload(ioc, list_id, list_name)
+    def add_to_list(
+        cls, ioc: str, list_id: str, list_name: str, tenant_id: str
+    ) -> bool:
+        return Azure.az_ad_list_upload(ioc, list_id, list_name, tenant_id)
 
     @staticmethod
     def is_cidr(ip_str):
