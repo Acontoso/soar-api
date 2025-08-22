@@ -5,6 +5,8 @@ pool:
 
 variables:
   aws.rolecredential.maxduration: '3600'
+  snyk_organization_id: 'your-snyk-organization-id'
+  snyk_project_name: 'your-snyk-project-name'
 
 stages:
 - stage: SASTIaC
@@ -34,21 +36,31 @@ stages:
 - stage: SASTCode
   dependsOn: []
   jobs:
-  - job: Dependency_Scanning_Codebase
+  - job: Dependency_Scanning
     steps:
     - script: |
         python -m pip install --upgrade pip
       name: PipUpgrade
-    - task: AdvancedSecurity-Dependency-Scanning@1
-  - job: Code_Scanning_Codebase
-    steps:
-    - task: AdvancedSecurity-Codeql-Init@1
+    - task: SnykSecurityScan@1
       inputs:
-        languages: "python"
-        querysuite: 'security-extended'
-        sourcesfolder: $(System.DefaultWorkingDirectory)/application
-    - task: AdvancedSecurity-Codeql-Analyze@1
-    - task: AdvancedSecurity-Publish@1
+        serviceConnectionEndpoint: ''
+        testType: 'app'
+        severityThreshold: 'medium'
+        failOnIssues: true
+        projectName: $(snyk_project_name)
+        organization: $(snyk_organization_id)
+        failOnThreshold: 'medium' #optional, depending on CI
+  - job: Code_Scanning
+    steps:
+    - task: SnykSecurityScan@1
+      inputs:
+        serviceConnectionEndpoint: ''
+        testType: 'code'
+        codeSeverityThreshold: 'medium'
+        failOnThreshold: 'medium'
+        failOnIssues: true
+        projectName: $(snyk_project_name)
+        organization: $(snyk_organization_id)
 
 - stage: Unittest
   dependsOn: []
@@ -62,7 +74,7 @@ stages:
         export PYTHONPATH=$(System.DefaultWorkingDirectory)
         echo "PYTHONPATH=$PYTHONPATH"
         python -W ignore -m unittest discover -s tests
-      name: PipUpgrade
+      name: UnittestRun
       workingDirectory: '$(System.DefaultWorkingDirectory)'
 
 - stage: Terraform
