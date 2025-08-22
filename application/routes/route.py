@@ -6,8 +6,9 @@ from application.controllers.defender import DATP
 from application.controllers.azad import AzureAD
 from application.controllers.sase import SASE
 from application.middleware.authen import verify_scopes
+from application.controllers.manual import Manual
 
-VALID_ACTIONS = [
+DATP_VALID_ACTIONS = [
     "Block",
     "Audit",
     "BlockAndRemediate",
@@ -113,6 +114,38 @@ def init_routes(app: Flask):
             response.status_code = 401
             return response
 
+    @app.route("/manual", methods=["POST"])
+    def manual_soar():
+        required_scopes = ["soar-api/admin.readwrite.all"]
+        if verify_scopes(g.token, required_scopes):
+            if request.is_json:
+                data = request.get_json()
+                try:
+                    ioc, integration, action, incident_id, tenant_id = data.values()
+                except Exception as error:
+                    print(error)
+                    response = jsonify(
+                        {
+                            "error": "Failed to unpack all POST arguments, please provide IOC, Action & Sentinel Incident ID"
+                        }
+                    )
+                    response.status_code = 400
+                    return response
+                resp_data = Manual.write_db(
+                    ioc, integration, action, incident_id, tenant_id
+                )
+                return jsonify(resp_data)
+            else:
+                response = jsonify({"error": "Request must be JSON"})
+                response.status_code = 400
+                return response
+        else:
+            response = jsonify(
+                {"error": "Missing required scopes in access token in API call"}
+            )
+            response.status_code = 401
+            return response
+
     @app.route("/datp/upload", methods=["POST"])
     def ioc_post_datp():
         required_scopes = ["soar-api/admin.readwrite.all"]
@@ -120,8 +153,8 @@ def init_routes(app: Flask):
             if request.is_json:
                 data = request.get_json()
                 try:
-                    ioc, action, incident_id = data.values()
-                    if action not in VALID_ACTIONS:
+                    ioc, action, incident_id, tenant_id = data.values()
+                    if action not in DATP_VALID_ACTIONS:
                         response = jsonify(
                             {"error": "Action must be in list of supported actions"}
                         )
@@ -136,7 +169,7 @@ def init_routes(app: Flask):
                     )
                     response.status_code = 400
                     return response
-                resp_data = DATP.ioc_upload(ioc, action, incident_id)
+                resp_data = DATP.ioc_upload(ioc, action, incident_id, tenant_id)
                 return jsonify(resp_data)
             else:
                 response = jsonify({"error": "Request must be JSON"})
@@ -156,7 +189,7 @@ def init_routes(app: Flask):
             if request.is_json:
                 data = request.get_json()
                 try:
-                    ioc, list_id, list_name, incident_id = data.values()
+                    ioc, list_id, list_name, incident_id, tenant_id = data.values()
                 except Exception as error:
                     print(error)
                     response = jsonify(
@@ -166,7 +199,9 @@ def init_routes(app: Flask):
                     )
                     response.status_code = 400
                     return response
-                resp_data = AzureAD.ip_upload(ioc, incident_id, list_id, list_name)
+                resp_data = AzureAD.ip_upload(
+                    ioc, incident_id, list_id, list_name, tenant_id
+                )
                 return jsonify(resp_data)
             else:
                 response = jsonify({"error": "Request must be JSON"})
@@ -213,12 +248,12 @@ def init_routes(app: Flask):
     def sase_sandbox():
         required_scopes = ["soar-api/admin.readwrite.all"]
         if verify_scopes(g.token, required_scopes):
-            if 'file' in request.files:
+            if "file" in request.files:
                 try:
-                    uploaded_file = request.files['file']
+                    uploaded_file = request.files["file"]
                     uploaded_file.seek(0, 2)  # Move to end of file
                     file_size = uploaded_file.tell()
-                    uploaded_file.seek(0)     # Reset pointer to start
+                    uploaded_file.seek(0)  # Reset pointer to start
                     if file_size > 2 * 1024 * 1024:
                         response = jsonify({"error": "File size exceeds 2MB limit"})
                         response.status_code = 400
@@ -227,9 +262,7 @@ def init_routes(app: Flask):
                 except Exception as error:
                     print(error)
                     response = jsonify(
-                        {
-                            "error": "Failed to unpack & deserialize submitted file"
-                        }
+                        {"error": "Failed to unpack & deserialize submitted file"}
                     )
                     response.status_code = 400
                     return response
