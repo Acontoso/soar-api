@@ -12,6 +12,7 @@ ACTION_TABLE = os.getenv("ACTION_TABLE")
 ACTION_PARTITION_KEY = os.getenv("ACTION_PARTITION_KEY")
 ACTION_SORT_KEY = os.getenv("ACTION_SORT_KEY")
 
+
 class SASE:
     @classmethod
     def block(cls, ioc: str, incident_id: str) -> dict:
@@ -26,7 +27,12 @@ class SASE:
             }
         ioc_type = cls.ioc_type_finder(ioc)
         if ioc_type == "IPv4" and ipaddress.ip_address(ioc).is_private:
-            return {"Added": False, "IOC": ioc, "Integration": "SASE", "Action": "Block"}
+            return {
+                "Added": False,
+                "IOC": ioc,
+                "Integration": "SASE",
+                "Action": "Block",
+            }
         operation = Umbrella.upload(ioc, incident_id)
         if operation:
             cls.add_record_to_db_action(ioc, ioc_type, incident_id)
@@ -74,12 +80,14 @@ class SASE:
                 if data:
                     ioc_type = cls.ioc_type_finder(ioc)
                     categories = data.get("Categories", [])
-                    cls.add_record_to_db_enrich(ioc, ioc_type, "SASE", "Lookup", categories)
+                    cls.add_record_to_db_enrich(
+                        ioc, ioc_type, "SASE", "Lookup", categories
+                    )
                     response_data = {
                         "IOC": ioc,
                         "Categories": categories,
                         "Action": "Lookup",
-                        "Integration": "SASE"
+                        "Integration": "SASE",
                     }
             current_app.logger.info(
                 f"[+] Record is less than a year old, returning DB record for ioc {ioc}"
@@ -88,7 +96,7 @@ class SASE:
                 "IOC": ioc,
                 "Categories": db_lookup.get("Categories", []),
                 "Action": "Lookup",
-                "Integration": "SASE"
+                "Integration": "SASE",
             }
         except Exception as error:
             current_app.logger.error(
@@ -103,7 +111,7 @@ class SASE:
                     "IOC": ioc,
                     "Categories": categories,
                     "Action": "Lookup",
-                    "Integration": "SASE"
+                    "Integration": "SASE",
                 }
                 return response_data
 
@@ -118,7 +126,7 @@ class SASE:
                 "IOC": ioc,
                 "Categories": categories,
                 "Action": "Lookup",
-                "Integration": "SASE"
+                "Integration": "SASE",
             }
         else:
             current_app.logger.error(f"[-] Failed to lookup URL category for {ioc}")
@@ -160,8 +168,7 @@ class SASE:
         dynamo.put_item(ACTION_TABLE, item)
 
     @classmethod
-    def add_record_to_db_action(
-        cls, ioc: str, ioc_type: str, incident_id: str) -> None:
+    def add_record_to_db_action(cls, ioc: str, ioc_type: str, incident_id: str) -> None:
         dynamo = DynamoDBService(REGION)
         current_date = datetime.now().strftime("%d-%m-%Y")
         current_app.logger.info(f"[+] Attempting to write to DB, IOC: {ioc}")
@@ -182,5 +189,9 @@ class SASE:
             f"[+] Looking to see if record exists for table {ACTION_TABLE} where IOC primary key {hash_key_value}"
         )
         return dynamo.get_item(
-            ACTION_TABLE, ACTION_PARTITION_KEY, hash_key_value, ACTION_SORT_KEY, sort_key_value
+            ACTION_TABLE,
+            ACTION_PARTITION_KEY,
+            hash_key_value,
+            ACTION_SORT_KEY,
+            sort_key_value,
         )
