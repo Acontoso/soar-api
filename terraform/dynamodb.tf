@@ -15,8 +15,25 @@ resource "aws_dynamodb_table" "ioc_table" {
     name = "Source"
     type = "S"
   }
+
+  attribute {
+    name = "IOCType"
+    type = "S"
+  }
+
+  attribute {
+    name = "Date"
+    type = "S"
+  }
+
   point_in_time_recovery {
     enabled = true
+  }
+  global_secondary_index {
+    hash_key        = "IOCType"
+    name            = "IOC"
+    projection_type = "ALL"
+    range_key       = "Date"
   }
   tags = local.tags
 }
