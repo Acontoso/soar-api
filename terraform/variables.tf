@@ -128,31 +128,6 @@ variable "enc_string_ipabuse_db" {
   description = "IPAbuse DB API Key"
 }
 
-variable "enc_string_datp_client_id" {
-  type        = string
-  description = "Azure DATP encrypted client id"
-}
-
-variable "enc_string_datp_client_secret" {
-  type        = string
-  description = "Azure DATP encrypted client secret"
-}
-
-variable "enc_string_urlscan_client_secret" {
-  type        = string
-  description = "URLScan API Key"
-}
-
-variable "enc_string_graph_client_id" {
-  type        = string
-  description = "Graph API client id"
-}
-
-variable "enc_string_graph_client_secret" {
-  type        = string
-  description = "Graph API client secret"
-}
-
 variable "ms_tenant_id" {
   type        = string
   description = "Microsoft Tenant ID specific to this installation"
@@ -176,4 +151,14 @@ variable "cognito_domain_name" {
 variable "apigw_cognito_authorizer_name" {
   type        = string
   description = "Used to verify the token is legitimate when reaching API gateway"
+}
+
+variable "identity_pool_id" {
+  type        = string
+  description = "Identity Pool ID for OIDC authentication"
+}
+
+variable "identity_pool_login" {
+  type        = string
+  description = "Identity Pool Login for OIDC authentication"
 }
