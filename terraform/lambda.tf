@@ -17,15 +17,15 @@ resource "aws_lambda_function" "lambda" {
   #checkov:skip=CKV_AWS_173: "Check encryption settings for Lambda environmental variable"
   function_name    = var.lambda_function_name
   role             = aws_iam_role.lambda_role.arn
-  s3_bucket         = data.aws_s3_bucket.artefact_bucket.id
-  s3_key            = "application.zip"
-  handler           = var.handler
-  runtime           = var.runtime
-  memory_size       = var.memory_size
-  tags              = local.tags
-  timeout           = var.timeout
-  description       = var.description
-  source_code_hash  = data.aws_s3_object.lambda_zip.etag
+  s3_bucket        = data.aws_s3_bucket.artefact_bucket.id
+  s3_key           = "application.zip"
+  handler          = var.handler
+  runtime          = var.runtime
+  memory_size      = var.memory_size
+  tags             = local.tags
+  timeout          = var.timeout
+  description      = var.description
+  source_code_hash = data.aws_s3_object.lambda_zip.etag
   logging_config {
     log_format = "JSON"
   }
@@ -38,6 +38,8 @@ resource "aws_lambda_function" "lambda" {
       "ACTION_PARTITION_KEY" = var.dynamodb_primary_key_actions
       "ACTION_SORT_KEY"      = var.dynamodb_sort_key_actions
       "TENANT_ID"            = var.ms_tenant_id
+      "IDENTITY_POOL_ID"     = var.identity_pool_id
+      "IDENTITY_POOL_LOGIN"  = var.identity_pool_login
     }
   }
   depends_on = [null_resource.upload_lambda_zip]
@@ -47,17 +49,20 @@ resource "null_resource" "pip_install" {
   triggers = {
     always_run = timestamp()
   }
-
+  #AWS Lambda automatically adds the root of the ZIP to sys.path, so both application and all dependencies at the root will be importable
+  # This ensures at the root of the ZIP file, we have the application directory (contains user defined code) and all dependencies are here.
   provisioner "local-exec" {
     command = "python3 -m pip install -r ${path.module}/../requirements.txt -t ${path.module}/../ && python3 -m pip install --platform manylinux2014_x86_64 --implementation cp --python-version 3.11 --only-binary=:all: --upgrade cryptography -t ${path.module}/../"
   }
 }
 
+# The parent directory is zipped and stored in the terraform directory to be uploaded to S3. 
+
 data "archive_file" "code" {
   type        = "zip"
-  source_dir  = "${path.module}/.." # Use parent dir so application/ is at root
+  source_dir  = "${path.module}/.."                      # Use parent dir so application/ is at root
   output_path = "${path.root}/terraform/application.zip" # Use absolute path for CI/CD reliability
-  excludes    = ["env/*", "terraform/*","workloads/*", "README.md" ,"tests/*", "*.pyc", "__pycache__/*", "openapi.yaml", ".git/*", ".gitignore"]
+  excludes    = ["env/*", "terraform/*", "workloads/*", "README.md", "tests/*", "*.pyc", "__pycache__/*", "openapi.yaml", ".git/*", ".gitignore"]
   depends_on  = [null_resource.pip_install]
 }
 
@@ -105,6 +110,19 @@ data "aws_iam_policy_document" "lambda_custom_execution_policy" {
     resources = [
       aws_dynamodb_table.ioc_table.arn,
       aws_dynamodb_table.actions_table.arn
+    ]
+  }
+  statement {
+    sid    = "CognitoIdentityPoolOIDC"
+    effect = "Allow"
+    actions = [
+      "cognito-identity:GetOpenIdTokenForDeveloperIdentity",
+      "cognito-identity:LookupDeveloperIdentity",
+      "cognito-identity:MergeDeveloperIdentities",
+      "cognito-identity:UnlinkDeveloperIdentity"
+    ]
+    resources = [
+      data.aws_cognito_identity_pool.identity_pool_oidc.arn
     ]
   }
 }
