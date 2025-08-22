@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from flask import Flask, g
 from application.routes.route import init_routes
 
