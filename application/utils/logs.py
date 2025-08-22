@@ -6,10 +6,10 @@ from flask import has_request_context, g
 
 class RequestIdFilter(logging.Filter):
     def filter(self, record):
-        #Log record object that is created each time a logger is written to
-        #Filter can add or modify attributes of the record before outputted
+        # Log record object that is created each time a logger is written to
+        # Filter can add or modify attributes of the record before outputted
         if has_request_context() and hasattr(g, "request_id"):
-            #Request context relates to global flask objects such as requess & g
+            # Request context relates to global flask objects such as requess & g
             record.request_id = g.request_id
         else:
             record.request_id = None
