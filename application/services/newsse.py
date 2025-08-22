@@ -9,7 +9,7 @@ import time
 TENANT_ID = os.getenv("TENANT_ID")
 REGION = "ap-southeast-2"
 
-                         
+
 def obfuscateApiKey(api_key: str) -> Optional[list]:
     now = int(time.time() * 1000)
     n = str(now)[-6:]
@@ -18,7 +18,7 @@ def obfuscateApiKey(api_key: str) -> Optional[list]:
     for i in range(0, len(str(n)), 1):
         key += api_key[int(str(n)[i])]
     for j in range(0, len(str(r)), 1):
-        key += api_key[int(str(r)[j])+2]
+        key += api_key[int(str(r)[j]) + 2]
     return key, now
 
 
@@ -41,20 +41,22 @@ class SSEServices:
                 f"[-] Failed to submit file to SSE Sandbox: {error}"
             )
             return None
-        
+
     @classmethod
     def lookup_url_category(cls, ioc: str) -> Optional[dict]:
         """Submit file to SSE Sandbox"""
-        payload = {
-            "urls": [ioc]
-        }
-        cookies = {'JSESSIONID': cls.get_jsession()}
+        payload = {"urls": [ioc]}
+        cookies = {"JSESSIONID": cls.get_jsession()}
         api_url = "https://api.sse.net/api/v1/urlLookup"
         try:
             current_app.logger.info("[+] Submitting URL to SSE for category lookup")
             headers = {"Content-Type": "application/json"}
             response = requests.post(
-                url=api_url, data=json.dumps(payload), headers=headers, cookies=cookies, timeout=10
+                url=api_url,
+                data=json.dumps(payload),
+                headers=headers,
+                cookies=cookies,
+                timeout=10,
             )
             response.raise_for_status()
             current_app.logger.info("[+] URL category lookup successful")
