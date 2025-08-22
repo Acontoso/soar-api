@@ -2,13 +2,16 @@ import uuid
 from datetime import datetime, timedelta, timezone
 import requests
 from typing import Optional
-from application.services.servicesaws import SSMServices
+from application.services.servicesaws import CognitoServices
+from azure.identity import ClientAssertionCredential
 from flask import current_app
 import json
 import os
+import re
 
 TENANT_ID = os.getenv("TENANT_ID")
 REGION = "ap-southeast-2"
+WESHEALTH_SECURITY_AZ_CLIENT_ID = "3b340f00-9bad-4559-86da-df76e9c3af4b"
 
 
 def generate_short_uuid():
@@ -52,53 +55,36 @@ class Defender:
     @classmethod
     def access_token_ms_sec_api(cls) -> Optional[str]:
         """Get OAuth access token to send data to Microsoft Defender 365"""
-        ssm = SSMServices(REGION)
         current_app.logger.info("[+] Requesting API key for DATP Check")
-        client_id = ssm.get_param(param="datp_client_id")
-        client_secret = ssm.get_param(param="datp_client_secret")
-        security_centre_scope = "https://api.securitycenter.windows.com/.default"
-        max_retries = 3
-        retry_count = 0
-        payload = cls.generate_access_token_payload(
-            client_id, client_secret, security_centre_scope
+        scope = "https://api.securitycenter.windows.com/.default"
+        token = ClientAssertionCredential(
+            tenant_id=TENANT_ID,
+            client_id=WESHEALTH_SECURITY_AZ_CLIENT_ID,
+            func=CognitoServices.get_token,
         )
-        endpoint = (
-            "https://login.microsoftonline.com/" + TENANT_ID + "/oauth2/v2.0/token"
-        )
-        headers = {"content-type": "application/x-www-form-urlencoded"}
-        while retry_count < max_retries:
+        if token:
             try:
-                response = requests.post(
-                    url=endpoint, headers=headers, data=payload, timeout=20
-                )
-                response.raise_for_status()
-            except requests.exceptions.HTTPError as error:
+                access_token = token.get_token(scope).token
+                current_app.logger.info("[+] Successfully received token from Azure AD")
+                return access_token
+            except Exception as error:
                 current_app.logger.error(
-                    f"[-] Upstream returned a status code of {response.status_code}, retrying..."
+                    f"[-] Failed to get access token from Azure AD: {error}"
                 )
-                current_app.logger.error(f"{error}")
-                retry_count += 1
-                continue
-            token = response.json().get("access_token")
-            if token:
-                current_app.logger.info(
-                    "[+] Successfully recieved token from Azure AD re DATP"
-                )
-                return token
-            else:
-                current_app.logger.error(
-                    "[-] Failed to get access token from Azure AD, retrying..."
-                )
-                retry_count += 1
-                continue
-        current_app.logger.error(
-            "[-] Failed to get access token from Azure AD after multiple retries"
-        )
-        return None
+                return None
+        else:
+            current_app.logger.error("[-] Failed to get token from Cognito")
+            return None
 
     @classmethod
     def check_indicator(cls, indicator: str, token: str) -> bool:
         """Check to see if indicator already exists in Defender for Endpoint"""
+        verify_indicator = cls.ioc_type_finder(ioc=indicator)
+        if not verify_indicator:
+            current_app.logger.error(
+                f"[-] Invalid indicator type for, cannot check in DATP"
+            )
+            return False
         endpoint = f"https://api.securitycenter.microsoft.com/api/indicators?$filter=indicatorValue+eq+'{indicator}'"
         headers = {"Authorization": f"Bearer {token}"}
         try:
@@ -170,3 +156,24 @@ class Defender:
                 "[-] Failed to get upsteam to response, returning empty response"
             )
             return False
+
+    @classmethod
+    def ioc_type_finder(ioc: str) -> Optional[str]:
+        """Extract IOC from str"""
+        indicator = str(ioc)
+        if re.match(r"[A-Fa-f0-9]{64}$", indicator):
+            return "FileSha256"
+        if re.match(r"[A-Fa-f0-9]{32}$", indicator):
+            return "FileMd5"
+        if re.match(r"[A-Fa-f0-9]{40}$", indicator):
+            return "FileSha1"
+        # match ipv4
+        if re.match(
+            r"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
+            indicator,
+        ):
+            return "IpAddress"
+        # match domain names
+        if re.match(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z]{2,})+$", indicator):
+            return "DomainName"
+        return ""
