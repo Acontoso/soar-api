@@ -1,5 +1,6 @@
 import requests
-from application.services.servicesaws import SSMServices
+from application.services.servicesaws import CognitoServices
+from azure.identity import ClientAssertionCredential
 from flask import current_app
 from typing import Optional
 import os
@@ -7,14 +8,36 @@ import json
 
 TENANT_ID = os.getenv("TENANT_ID")
 REGION = "ap-southeast-2"
+APPROVED_LIST_NAMES = ["SOAR-API-Locations"]
+APPROVED_LIST_IDS = [
+    "0b7f8da0-a271-4bf8-9c85-01c7514766c9",
+    "043e37d2-8214-41db-9b4f-b4291ddd6382",
+]
+WESHEALTH_GRAPH_AZ_CLIENT_ID = "12f71dfd-10c2-4bb9-a1de-347f270acc1a"
+WESHEALTH_MA_GRAPH_AZ_CLIENT_ID = "aa9c2c20-b0f9-4e75-a9bf-19fff70641d0"
 
 
 class Azure:
     @classmethod
-    def az_ad_list_upload(cls, ioc: str, list_id: str, list_name: str) -> bool:
+    def az_ad_list_upload(
+        cls, ioc: str, list_id: str, list_name: str, tenant_id: str
+    ) -> bool:
         if not all([ioc, list_id, list_name]):
             current_app.logger.error("One or more required parameters are empty.")
             return False
+        if list_name not in APPROVED_LIST_NAMES or list_id not in APPROVED_LIST_IDS:
+            current_app.logger.error(
+                f"List name {list_name} or list ID {list_id} is not approved."
+            )
+            return False
+        match list_id:
+            case "0b7f8da0-a271-4bf8-9c85-01c7514766c9":
+                client_id = WESHEALTH_GRAPH_AZ_CLIENT_ID
+            case "043e37d2-8214-41db-9b4f-b4291ddd6382":
+                client_id = WESHEALTH_MA_GRAPH_AZ_CLIENT_ID
+            case _:
+                current_app.logger.error(f"Unknown list_id: {list_id}")
+                return False
         endpoint = f"https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations/{list_id}"
         payload = {
             "@odata.type": "#microsoft.graph.ipNamedLocation",
@@ -22,7 +45,7 @@ class Azure:
             "isTrusted": False,
             "ipRanges": [],
         }
-        token = cls.access_token_graph_api()
+        token = cls.access_token_graph_api(client_id, tenant_id)
         if token:
             header = {
                 "Authorization": f"Bearer {token}",
@@ -59,62 +82,25 @@ class Azure:
             return False
 
     @classmethod
-    def generate_access_token_payload(
-        cls, client_id: str, client_secret: str, scope: str
-    ) -> str:
-        """Generate payload for access token for client credential flow"""
-        payload = (
-            "client_id="
-            + client_id
-            + "&scope="
-            + scope
-            + "&client_secret="
-            + client_secret
-            + "&grant_type=client_credentials"
-        )
-        return payload
-
-    @classmethod
-    def access_token_graph_api(cls) -> Optional[str]:
+    def access_token_graph_api(cls, client_id: str, tenant_id: str) -> Optional[str]:
         """Get OAuth access token to send data to MS Graph API"""
-        ssm = SSMServices(REGION)
         current_app.logger.info("[+] Requesting API key for Graph API")
-        client_id = ssm.get_param(param="graph_client_id")
-        client_secret = ssm.get_param(param="graph_client_secret")
         scope = "https://graph.microsoft.com/.default"
-        max_retries = 3
-        retry_count = 0
-        payload = cls.generate_access_token_payload(client_id, client_secret, scope)
-        endpoint = (
-            "https://login.microsoftonline.com/" + TENANT_ID + "/oauth2/v2.0/token"
+        token = ClientAssertionCredential(
+            tenant_id=tenant_id,
+            client_id=client_id,
+            func=CognitoServices.get_token,
         )
-        headers = {"content-type": "application/x-www-form-urlencoded"}
-        while retry_count < max_retries:
+        if token:
             try:
-                response = requests.post(
-                    url=endpoint, headers=headers, data=payload, timeout=20
-                )
-                response.raise_for_status()
-            except requests.exceptions.HTTPError as error:
+                access_token = token.get_token(scope).token
+                current_app.logger.info("[+] Successfully received token from Azure AD")
+                return access_token
+            except Exception as error:
                 current_app.logger.error(
-                    f"[-] Upstream returned a status code of {response.status_code}, retrying..."
+                    f"[-] Failed to get access token from Azure AD: {error}"
                 )
-                current_app.logger.error(f"{error}")
-                retry_count += 1
-                continue
-            token = response.json().get("access_token")
-            if token:
-                current_app.logger.info(
-                    "[+] Successfully recieved token from Azure AD re DATP"
-                )
-                return token
-            else:
-                current_app.logger.error(
-                    "[-] Failed to get access token from Azure AD, retrying..."
-                )
-                retry_count += 1
-                continue
-        current_app.logger.error(
-            "[-] Failed to get access token from Azure AD after multiple retries"
-        )
-        return None
+                return None
+        else:
+            current_app.logger.error("[-] Failed to get token from Cognito")
+            return None
