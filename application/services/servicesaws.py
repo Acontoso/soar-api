@@ -1,8 +1,12 @@
 import boto3
+import os
 import base64
 from typing import Optional
 from flask import current_app
 from boto3.dynamodb.types import TypeDeserializer
+
+IDENTITY_POOL_ID = os.getenv("IDENTITY_POOL_ID")
+IDENTITY_POOL_LOGIN = os.getenv("IDENTITY_POOL_LOGIN")
 
 
 # boto3.setup_default_session(profile_name='sec-log')
@@ -97,3 +101,15 @@ class SSMServices:
 class KMSServices:
     def __init__(self, region: str):
         self.client = boto3.client("kms", region_name=region)
+
+
+class CognitoServices:
+    @classmethod
+    def get_token(cls) -> str:
+        logins = {"azuread": IDENTITY_POOL_LOGIN}
+        client = boto3.client("cognito-identity")
+
+        response = client.get_open_id_token_for_developer_identity(
+            IdentityPoolId=IDENTITY_POOL_ID, Logins=logins
+        )
+        return response["Token"]
