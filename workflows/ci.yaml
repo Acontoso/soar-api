@@ -38,9 +38,6 @@ stages:
   jobs:
   - job: Dependency_Scanning
     steps:
-    - script: |
-        python -m pip install --upgrade pip
-      name: PipUpgrade
     - task: SnykSecurityScan@1
       inputs:
         serviceConnectionEndpoint: ''
@@ -61,21 +58,6 @@ stages:
         failOnIssues: true
         projectName: $(snyk_project_name)
         organization: $(snyk_organization_id)
-
-- stage: Unittest
-  dependsOn: []
-  jobs:
-  - job: runtest
-    steps:
-    - script: |
-        python -m venv venv
-        source venv/bin/activate
-        pip install -r requirements.txt
-        export PYTHONPATH=$(System.DefaultWorkingDirectory)
-        echo "PYTHONPATH=$PYTHONPATH"
-        python -W ignore -m unittest discover -s tests
-      name: UnittestRun
-      workingDirectory: '$(System.DefaultWorkingDirectory)'
 
 - stage: Terraform
   dependsOn: []

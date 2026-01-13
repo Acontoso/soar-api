@@ -1,0 +1,444 @@
+package app
+
+import (
+	"context"
+	"net/http"
+	"net/netip"
+	"time"
+
+	"github.com/Acontoso/soar-api/code/database"
+	"github.com/Acontoso/soar-api/code/middleware"
+	"github.com/Acontoso/soar-api/code/models"
+	"github.com/Acontoso/soar-api/code/services"
+	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
+)
+
+var validate = validator.New()
+
+func (a *App) IPLookup(c *gin.Context) {
+	_, cancel := context.WithTimeout(c, 100*time.Second)
+	defer cancel()
+	var abuseIp models.ClientAbuseIPRequestPayload
+	lg := middleware.GetLogger(c)
+	lg.Info("ip lookup", "path", c.FullPath())
+	if err := c.ShouldBindJSON(&abuseIp); err != nil {
+		c.JSON(400, gin.H{"Error, failed to deserialise into JSON": err.Error()})
+		return
+	}
+	if err := validate.Struct(abuseIp); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation of AbuseIP payload failed", "details": err.Error()})
+		return
+	}
+	ip := abuseIp.IP
+	incidentId := abuseIp.IncidentID
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "Invalid IP address"})
+		return
+	}
+	lg.Info("IP address parsed successfully", "ip", addr)
+	if addr.IsPrivate() {
+		c.JSON(200, models.ClientAbuseIPResponsePayload{
+			Confidence:  "None",
+			Country:     "None",
+			ReportCount: 0,
+			TOR:         false,
+			Private:     true,
+			IOC:         ip,
+		})
+		return
+	}
+	data, err := database.GetItemIOCFinder(c, a.Dynamo, ip, "IPAbuseDB", lg)
+	if err == nil {
+		lg.Info("Record not found in Database for IOC", "ip", ip)
+	}
+	if data != nil {
+		info := data.Info
+		confidence := data.MaliciousConfidence
+		countryCode, _ := info["CountryCode"].(string)
+		reportCount, _ := info["ReportCount"].(float64)
+		tor, _ := info["TOR"].(bool)
+		c.JSON(200, models.ClientAbuseIPResponsePayload{
+			Confidence:  confidence,
+			Country:     countryCode,
+			ReportCount: int(reportCount),
+			TOR:         tor,
+			Private:     false,
+			IOC:         ip,
+		})
+		return
+	}
+
+	if a.AbuseIPDB == nil {
+		lg.Error("abuseipdb client not configured")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
+	}
+
+	lookupResp, err := a.AbuseIPDB.CheckIP(c, ip, a.SSM, a.KMS, lg)
+	if err != nil {
+		lg.Error("abuseipdb lookup failed", "error", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Internal server error"})
+		return
+	}
+	// This dereferences the data inside the pointer
+	respData := lookupResp.Data
+	// Store in DynamoDB for future lookups
+	infoMap := map[string]interface{}{
+		"Country":     respData.CountryName,
+		"CountryCode": respData.CountryCode,
+		"ReportCount": respData.TotalReports,
+		"TOR":         respData.IsTor,
+	}
+	score := respData.AbuseConfidenceScore
+	confidenceLevel := models.GetMaliciousConfidenceLevel(score)
+	loc, _ := time.LoadLocation("Australia/Sydney")
+	iocEntry := &models.IOCTable{
+		IOC:                 ip,
+		IncidentID:          incidentId,
+		IOCType:             "IPv4",
+		EnrichmentSource:    "AbuseIPDB",
+		MaliciousConfidence: string(confidenceLevel),
+		Date:                time.Now().In(loc).Format("02-01-2006"),
+		Info:                infoMap,
+	}
+	err = database.PutItemIOCFinder(c, a.Dynamo, lg, iocEntry)
+	if err != nil {
+		lg.Error("failed to put item into dynamodb", "error", err)
+		// continue even if we fail to store
+	}
+	c.JSON(200, models.ClientAbuseIPResponsePayload{
+		Confidence:  string(confidenceLevel),
+		Country:     respData.CountryName,
+		ReportCount: respData.TotalReports,
+		TOR:         respData.IsTor,
+		Private:     false,
+		IOC:         ip,
+	})
+}
+
+func (a *App) AnomaliLookup(c *gin.Context) {
+	_, cancel := context.WithTimeout(c, 100*time.Second)
+	defer cancel()
+	var anomaliLookup models.AnomaliRequestPayload
+	lg := middleware.GetLogger(c)
+	lg.Info("anomali lookup", "path", c.FullPath())
+	if err := c.ShouldBindJSON(&anomaliLookup); err != nil {
+		lg.Error("Error, failed to deserialise into JSON", "error", err)
+		c.JSON(400, gin.H{"Error": "Payload failed to deserialise into JSON"})
+		return
+	}
+	if err := validate.Struct(anomaliLookup); err != nil {
+		lg.Error("Validation of Anomali payload failed", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation of Anomali payload failed"})
+		return
+	}
+	ioc := anomaliLookup.IOC
+	incidentId := anomaliLookup.IncidentID
+	data, err := database.GetItemIOCFinder(c, a.Dynamo, ioc, "Anomali", lg)
+	if err != nil {
+		lg.Info("Record not found in Database for IOC", "ioc", ioc)
+	}
+	if data != nil {
+		lg.Info("Existing record found for IOC", "ioc", ioc)
+		info := data.Info
+		confidence := data.MaliciousConfidence
+		iocType := data.IOCType
+		// DynamoDB numbers unmarshal as float64
+		score := 0
+		if scoreVal, ok := info["Score"]; ok {
+			switch v := scoreVal.(type) {
+			case float64:
+				score = int(v)
+			case int:
+				score = v
+			}
+		}
+		c.JSON(200, models.AnomaliResponsePayload{
+			Confidence: confidence,
+			IOCType:    iocType,
+			IOC:        ioc,
+			Score:      score,
+		})
+		return
+	}
+	iocType := models.IOCClassifier(ioc)
+	if iocType == "IPv4" || iocType == "IPv6" {
+		addr, err := netip.ParseAddr(ioc)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid IP address"})
+			return
+		}
+		lg.Info("IP address parsed successfully", "ip", addr)
+		if addr.IsPrivate() {
+			c.JSON(200, models.AnomaliResponsePayload{
+				Confidence: "None",
+				IOCType:    iocType,
+				IOC:        ioc,
+				Score:      0,
+			})
+			return
+		}
+	}
+	confidence, err := a.Anomali.CheckIOC(c, ioc, a.SSM, a.KMS, lg)
+	if err != nil {
+		lg.Error("anomali lookup failed", "error", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Internal server error"})
+		return
+	}
+	confidenceLevel := models.GetMaliciousConfidenceLevel(confidence)
+	loc, _ := time.LoadLocation("Australia/Sydney")
+	iocEntry := &models.IOCTable{
+		IOC:                 ioc,
+		IncidentID:          incidentId,
+		IOCType:             iocType,
+		EnrichmentSource:    "Anomali",
+		MaliciousConfidence: string(confidenceLevel),
+		Date:                time.Now().In(loc).Format("02-01-2006"),
+		Info: map[string]interface{}{
+			"Score": confidence,
+		},
+	}
+	err = database.PutItemIOCFinder(c, a.Dynamo, lg, iocEntry)
+	if err != nil {
+		lg.Error("failed to put item into dynamodb", "error", err)
+		// continue even if we fail to store
+	}
+	c.JSON(200, models.AnomaliResponsePayload{
+		Confidence: string(confidenceLevel),
+		IOCType:    iocType,
+		IOC:        ioc,
+		Score:      confidence,
+	})
+}
+
+func (a *App) SSEBlock(c *gin.Context) {
+	_, cancel := context.WithTimeout(c, 100*time.Second)
+	defer cancel()
+	var sseUpload models.SSEUploadRequestPayload
+	lg := middleware.GetLogger(c)
+	lg.Info("Zscaler Block IOC", "path", c.FullPath())
+	if err := c.ShouldBindJSON(&sseUpload); err != nil {
+		lg.Error("Error, failed to deserialise into JSON", "error", err)
+		c.JSON(400, gin.H{"Error": "Payload failed to deserialise into JSON"})
+		return
+	}
+	if err := validate.Struct(sseUpload); err != nil {
+		lg.Error("Validation of SSE payload failed", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation of SSE IOC block payload failed"})
+		return
+	}
+	ioc := sseUpload.IOC
+	incidentId := sseUpload.IncidentID
+	data, err := database.GetItemSOAR(c, a.Dynamo, ioc, "Zscaler", lg)
+	if err != nil {
+		lg.Info("Record not found in Database for IOC", "ioc", ioc)
+	}
+	if data != nil {
+		lg.Info("Existing record found for IOC", "ioc", ioc)
+		c.JSON(200, models.SSEUploadResponsePayload{
+			Added:       true,
+			IOC:         ioc,
+			Integration: "Zscaler",
+			Action:      "Block",
+		})
+		return
+	}
+	if a.Zscaler == nil {
+		lg.Error("Zscaler client not configured")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
+	}
+	iocType := models.IOCClassifier(ioc)
+	if iocType == "IPv4" || iocType == "IPv6" {
+		addr, err := netip.ParseAddr(ioc)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid IP address"})
+			return
+		}
+		lg.Info("IP address parsed successfully", "ip", addr)
+		if addr.IsPrivate() {
+			c.JSON(200, models.SSEUploadResponsePayload{
+				Added:       false,
+				IOC:         ioc,
+				Integration: "Zscaler",
+				Action:      "None",
+			})
+			return
+		}
+	}
+	result, err := a.Zscaler.BlockIOC(c, ioc, a.SSM, a.KMS, lg)
+	if err != nil {
+		lg.Error("Zscaler IOC block failed", "error", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Internal server error"})
+		return
+	}
+	if result {
+		loc, _ := time.LoadLocation("Australia/Sydney")
+		soarEntry := &models.SOARTable{
+			IOC:         ioc,
+			Integration: "Zscaler",
+			Date:        time.Now().In(loc).Format("02-01-2006"),
+			IncidentID:  incidentId,
+		}
+		err = database.PutItemSOAR(c, a.Dynamo, lg, soarEntry)
+		if err != nil {
+			lg.Error("failed to put item into dynamodb", "error", err)
+			// continue even if we fail to store
+		}
+	}
+	c.JSON(200, models.SSEUploadResponsePayload{
+		Added:       result,
+		IOC:         ioc,
+		Integration: "Zscaler",
+		Action:      "Block",
+	})
+}
+
+func (a *App) CABlock(c *gin.Context) {
+	_, cancel := context.WithTimeout(c, 100*time.Second)
+	defer cancel()
+	var calist models.AzureADCARequestPayload
+	lg := middleware.GetLogger(c)
+	lg.Info("Conditional Access Block IP", "path", c.FullPath())
+	if err := c.ShouldBindJSON(&calist); err != nil {
+		lg.Error("Error, failed to deserialise into JSON", "error", err)
+		c.JSON(400, gin.H{"Error": "Payload failed to deserialise into JSON"})
+		return
+	}
+	if err := validate.Struct(calist); err != nil {
+		lg.Error("Validation of SSE payload failed", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation of SSE IOC block payload failed"})
+		return
+	}
+	ioc := calist.IOC
+	incidentId := calist.IncidentID
+	tenantID := calist.TenantID
+	listID := calist.ListID
+	data, err := database.GetItemSOAR(c, a.Dynamo, ioc, "AzureAD", lg)
+	if err != nil {
+		lg.Info("Record not found in Database for IOC", "ioc", ioc)
+	}
+	if data != nil {
+		lg.Info("Existing record found for IOC", "ioc", ioc)
+		c.JSON(200, models.AzureADCAResponsePayload{
+			IOC:      ioc,
+			ListName: "SOAR-API-Locations",
+			Action:   "Block",
+		})
+		return
+	}
+	iocType := models.IOCClassifier(ioc)
+	if iocType == "IPv4" || iocType == "IPv6" {
+		addr, err := netip.ParseAddr(ioc)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Invalid IP address"})
+			return
+		}
+		lg.Info("IP address parsed successfully", "ip", addr)
+		if addr.IsPrivate() {
+			c.JSON(200, models.AzureADCAResponsePayload{
+				IOC:      ioc,
+				ListName: "SOAR-API-Locations",
+				Action:   "None",
+			})
+			return
+		}
+	} else {
+		c.JSON(400, gin.H{"error": "Not valid IP Address"})
+		return
+	}
+	result, err := services.UpdateCAList(c, ioc, tenantID, listID, a.SSM, a.KMS, a.Cognito, lg)
+	if err != nil {
+		lg.Error("AzureAD IOC block failed", "error", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Internal server error"})
+		return
+	}
+	if result {
+		loc, _ := time.LoadLocation("Australia/Sydney")
+		soarEntry := &models.SOARTable{
+			IOC:         ioc,
+			Integration: "AzureAD",
+			Date:        time.Now().In(loc).Format("02-01-2006"),
+			IncidentID:  incidentId,
+			Info: map[string]interface{}{
+				"TenantID": tenantID,
+				"ListID":   listID,
+				"ListName": "SOAR-API-Locations",
+			},
+		}
+		err = database.PutItemSOAR(c, a.Dynamo, lg, soarEntry)
+		if err != nil {
+			lg.Error("failed to put item into dynamodb", "error", err)
+			// continue even if we fail to store
+		}
+	}
+	c.JSON(200, models.AzureADCAResponsePayload{
+		IOC:      ioc,
+		ListName: "SOAR-API-Locations",
+		Action:   "Block",
+	})
+}
+
+func (a *App) DATPBlock(c *gin.Context) {
+	_, cancel := context.WithTimeout(c, 100*time.Second)
+	defer cancel()
+	var datp models.DATPUploadRequestPayload
+	lg := middleware.GetLogger(c)
+	lg.Info("DATP Block IOC", "path", c.FullPath())
+	if err := c.ShouldBindJSON(&datp); err != nil {
+		lg.Error("Error, failed to deserialise into JSON", "error", err)
+		c.JSON(400, gin.H{"Error": "Payload failed to deserialise into JSON"})
+		return
+	}
+	if err := validate.Struct(datp); err != nil {
+		lg.Error("Validation of SSE payload failed", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation of SSE IOC block payload failed"})
+		return
+	}
+	ioc := datp.IOC
+	incidentId := datp.IncidentID
+	tenantID := datp.TenantID
+	action := datp.Action
+	data, err := database.GetItemSOAR(c, a.Dynamo, ioc, "DATP", lg)
+	if err != nil {
+		lg.Info("Record not found in Database for IOC", "ioc", ioc)
+	}
+	if data != nil {
+		lg.Info("Existing record found for IOC", "ioc", ioc)
+		c.JSON(200, models.DATPUploadResponsePayload{
+			IOC:      ioc,
+			Platform: "DATP",
+			Action:   action,
+			Added:    true,
+		})
+		return
+	}
+	result, err := services.UploadIOCToDATP(c, ioc, tenantID, action, incidentId, a.Cognito, lg)
+	if err != nil {
+		lg.Error("AzureAD IOC block failed", "error", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Internal server error"})
+		return
+	}
+	if result {
+		loc, _ := time.LoadLocation("Australia/Sydney")
+		soarEntry := &models.SOARTable{
+			IOC:         ioc,
+			Integration: "DATP",
+			Date:        time.Now().In(loc).Format("02-01-2006"),
+			IncidentID:  incidentId,
+		}
+		err = database.PutItemSOAR(c, a.Dynamo, lg, soarEntry)
+		if err != nil {
+			lg.Error("failed to put item into dynamodb", "error", err)
+			// continue even if we fail to store
+		}
+	}
+	c.JSON(200, models.DATPUploadResponsePayload{
+		IOC:      ioc,
+		Platform: "DATP",
+		Action:   action,
+		Added:    true,
+	})
+}

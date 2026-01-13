@@ -4,7 +4,7 @@ resource "null_resource" "upload_lambda_zip" {
   }
   depends_on = [data.archive_file.code]
   provisioner "local-exec" {
-    command = "aws s3 cp ${path.root}/terraform/application.zip s3://${data.aws_s3_bucket.artefact_bucket.id}/application.zip"
+    command = "aws s3 cp ${path.root}/terraform/code.zip s3://${data.aws_s3_bucket.artefact_bucket.id}/code.zip"
   }
 }
 
@@ -18,7 +18,7 @@ resource "aws_lambda_function" "lambda" {
   function_name    = var.lambda_function_name
   role             = aws_iam_role.lambda_role.arn
   s3_bucket        = data.aws_s3_bucket.artefact_bucket.id
-  s3_key           = "application.zip"
+  s3_key           = "code.zip"
   handler          = var.handler
   runtime          = var.runtime
   memory_size      = var.memory_size
@@ -45,25 +45,26 @@ resource "aws_lambda_function" "lambda" {
   depends_on = [null_resource.upload_lambda_zip]
 }
 
-resource "null_resource" "pip_install" {
+resource "null_resource" "go_compile" {
   triggers = {
     always_run = timestamp()
   }
-  #AWS Lambda automatically adds the root of the ZIP to sys.path, so both application and all dependencies at the root will be importable
-  # This ensures at the root of the ZIP file, we have the application directory (contains user defined code) and all dependencies are here.
+  #Compile Go application for Lambda
+  # This builds the Go binary and outputs it as 'bootstrap' in the code directory
   provisioner "local-exec" {
-    command = "python3 -m pip install -r ${path.module}/../requirements.txt -t ${path.module}/../ && python3 -m pip install --platform manylinux2014_x86_64 --implementation cp --python-version 3.11 --only-binary=:all: --upgrade cryptography -t ${path.module}/../"
+    command = "cd ${path.module}/../code && GOOS=linux GOARCH=amd64 go build -ldflags=\"-w -s\" -o bootstrap ."
   }
 }
 
-# The parent directory is zipped and stored in the terraform directory to be uploaded to S3. 
+# The code directory is zipped and stored in the terraform directory to be uploaded to S3.
+# This includes the compiled Go binary (bootstrap) which Lambda will execute
 
 data "archive_file" "code" {
   type        = "zip"
-  source_dir  = "${path.module}/.."                      # Use parent dir so application/ is at root
-  output_path = "${path.root}/terraform/application.zip" # Use absolute path for CI/CD reliability
-  excludes    = ["env/*", "terraform/*", "workloads/*", "README.md", "tests/*", "*.pyc", "__pycache__/*", "openapi.yaml", ".git/*", ".gitignore"]
-  depends_on  = [null_resource.pip_install]
+  source_dir  = "${path.module}/../code"                 # Use code dir for Go application
+  output_path = "${path.root}/terraform/code.zip"        # Use absolute path for CI/CD reliability
+  excludes    = ["*.go", "go.mod", "go.sum", "tst.py"]   # Exclude source files, keep only bootstrap binary
+  depends_on  = [null_resource.go_compile]
 }
 
 data "aws_iam_policy_document" "lambda_custom_execution_policy" {
@@ -188,9 +189,9 @@ resource "aws_lambda_permission" "api_gateway_trigger" {
   source_arn    = "${aws_api_gateway_rest_api.gateway_object.execution_arn}/*/*/*" #All methods and stages
 }
 
-resource "null_resource" "check_zip" {
-  depends_on = [data.archive_file.code]
-  provisioner "local-exec" {
-    command = "ls -lh ${path.root}/terraform/application.zip && unzip -l ${path.root}/terraform/application.zip"
-  }
-}
+# resource "null_resource" "check_zip" {
+#   depends_on = [data.archive_file.code]
+#   provisioner "local-exec" {
+#     command = "ls -lh ${path.root}/terraform/application.zip && unzip -l ${path.root}/terraform/application.zip"
+#   }
+# }

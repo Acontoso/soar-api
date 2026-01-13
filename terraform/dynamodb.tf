@@ -4,15 +4,10 @@ resource "aws_dynamodb_table" "ioc_table" {
   billing_mode                = "PAY_PER_REQUEST"
   deletion_protection_enabled = true
   hash_key                    = "IOC"
-  range_key                   = "Source"
+  range_key                   = "EnrichmentSource"
 
   attribute {
     name = "IOC"
-    type = "S"
-  }
-
-  attribute {
-    name = "Source"
     type = "S"
   }
 
@@ -22,7 +17,22 @@ resource "aws_dynamodb_table" "ioc_table" {
   }
 
   attribute {
+    name = "EnrichmentSource"
+    type = "S"
+  }
+
+  attribute {
     name = "Date"
+    type = "S"
+  }
+
+  attribute {
+    name = "IncidentID"
+    type = "S"
+  }
+
+  attribute {
+    name = "MaliciousConfidence"
     type = "S"
   }
 
@@ -31,9 +41,21 @@ resource "aws_dynamodb_table" "ioc_table" {
   }
   global_secondary_index {
     hash_key        = "IOCType"
-    name            = "IOC"
+    name            = "IOCTypeDate"
     projection_type = "ALL"
     range_key       = "Date"
+  }
+  global_secondary_index {
+    hash_key        = "IOCType"
+    name            = "IOCTypeConfidence"
+    projection_type = "ALL"
+    range_key       = "MaliciousConfidence"
+  }
+  global_secondary_index {
+    hash_key        = "IOCType"
+    name            = "IOCTypeIncident"
+    projection_type = "ALL"
+    range_key       = "IncidentID"
   }
   tags = local.tags
 }
@@ -55,6 +77,31 @@ resource "aws_dynamodb_table" "actions_table" {
     name = "Integration"
     type = "S"
   }
+
+  attribute {
+    name = "Date"
+    type = "S"
+  }
+
+  attribute {
+    name = "IncidentID"
+    type = "S"
+  }
+
+  global_secondary_index {
+    hash_key        = "IOC"
+    name            = "IOCIncident"
+    projection_type = "ALL"
+    range_key       = "IncidentID"
+  }
+
+  global_secondary_index {
+    hash_key        = "IOC"
+    name            = "IOCDate"
+    projection_type = "ALL"
+    range_key       = "Date"
+  }
+  
   point_in_time_recovery {
     enabled = true
   }

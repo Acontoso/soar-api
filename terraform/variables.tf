@@ -162,3 +162,13 @@ variable "identity_pool_login" {
   type        = string
   description = "Identity Pool Login for OIDC authentication"
 }
+
+variable "enc_zscaler_client_id" {
+  type        = string
+  description = "Zscaler Client ID for API integration"
+}
+
+variable "enc_zscaler_client_secret" {
+  type        = string
+  description = "Zscaler Client Secret for API integration"
+}
