@@ -15,4 +15,6 @@ func SetupProtectedRoutes(app *appcontainer.App) {
 	tokenGroupSOAR.POST("/sse/zscaler", app.SSEBlock)
 	tokenGroupSOAR.POST("/azuread/ca", app.CABlock)
 	tokenGroupSOAR.POST("/datp/blockioc", app.DATPBlock)
+	tokenGroupSOAR.POST("/waf/blockip", app.CloudflareBlock)
 }
+
