@@ -17,3 +17,11 @@ type SOARTable struct {
 	IncidentID  string                 `dynamodbav:"IncidentID"`
 	Info        map[string]interface{} `dynamodbav:"Info"`
 }
+
+type SOARTableBatch struct {
+	IOC         []string               `dynamodbav:"IOC"`
+	Integration string                 `dynamodbav:"Integration"`
+	Date        string                 `dynamodbav:"Date"`
+	IncidentID  string                 `dynamodbav:"IncidentID"`
+	Info        map[string]interface{} `dynamodbav:"Info"`
+}
