@@ -7,12 +7,12 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/Acontoso/soar-api/code/models"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gin-gonic/gin"
+	"github.com/Acontoso/soar-api/code/models"
 )
 
 // var IOC_TABLE_NAME string = os.Getenv("IOC_TABLE_NAME")
@@ -120,6 +120,21 @@ func getKeySOAR(ioc models.SOARTable) map[string]types.AttributeValue {
 	return map[string]types.AttributeValue{"IOC": IOC, "Integration": Integration}
 }
 
+func getKeysSOAR(ioc models.SOARTableBatch) []map[string]types.AttributeValue {
+	keys := make([]map[string]types.AttributeValue, len(ioc.IOC))
+	Integration, err := attributevalue.Marshal(ioc.Integration)
+	if err != nil {
+		panic(err)
+	}
+	for i, ioc := range ioc.IOC {
+		keys[i] = map[string]types.AttributeValue{
+			"IOC":         &types.AttributeValueMemberS{Value: ioc},
+			"Integration": Integration,
+		}
+	}
+	return keys
+}
+
 func GetItemSOAR(c *gin.Context, client *dynamodb.Client, hash_key_value string, sort_key_value string, lg *slog.Logger) (*models.SOARTable, error) {
 	// use request context so timeouts/cancellation propagate
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
@@ -175,4 +190,132 @@ func PutItemSOAR(c *gin.Context, client *dynamodb.Client, lg *slog.Logger, data 
 		lg.Error("Couldn't add item to table. Here's why: %v\n", err)
 	}
 	return err
+}
+
+func GetItemsSOAR(c *gin.Context, client *dynamodb.Client, hash_key_values []string, sort_key_value string, lg *slog.Logger) ([]models.SOARTable, error) {
+	// use request context so timeouts/cancellation propagate
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	if client == nil {
+		lg.Error("dynamodb client is nil")
+		return nil, ErrNoDBClient
+	}
+	//pointer since it will let you return nil if item not present
+	data := &models.SOARTableBatch{
+		IOC:         hash_key_values,
+		Integration: sort_key_value,
+	}
+
+	resp, err := client.BatchGetItem(ctx, &dynamodb.BatchGetItemInput{
+		RequestItems: map[string]types.KeysAndAttributes{
+			SOAR_ACTIONS_TABLE_NAME: {
+				Keys: getKeysSOAR(*data),
+			},
+		},
+	})
+	if err != nil {
+		lg.Error("Error pulling data from database", "error", err)
+		return nil, nil
+	}
+
+	if resp.Responses == nil || len(resp.Responses) == 0 {
+		return nil, ErrNotFound
+	}
+
+	var results []models.SOARTable
+	for _, item := range resp.Responses[SOAR_ACTIONS_TABLE_NAME] {
+		var record models.SOARTable
+		if err := attributevalue.UnmarshalMap(item, &record); err != nil {
+			lg.Error("Couldn't unmarshal response", "error", err)
+			continue
+		}
+		results = append(results, record)
+	}
+
+	return results, nil
+}
+
+func PutItemsSOAR(c *gin.Context, client *dynamodb.Client, lg *slog.Logger, data []models.SOARTable) error {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	if client == nil {
+		lg.Error("dynamodb client is nil")
+		return ErrNoDBClient
+	}
+
+	const batchSize = 25
+
+	for i := 0; i < len(data); i += batchSize {
+		end := i + batchSize
+		if end > len(data) {
+			end = len(data)
+		}
+		batch := data[i:end]
+
+		writeRequests := make([]types.WriteRequest, len(batch))
+		for j, item := range batch {
+			marshaledItem, err := attributevalue.MarshalMap(item)
+			if err != nil {
+				lg.Error("Failed to marshal item", "error", err)
+				continue
+			}
+			writeRequests[j] = types.WriteRequest{
+				PutRequest: &types.PutRequest{
+					Item: marshaledItem,
+				},
+			}
+		}
+
+		_, err := client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+			RequestItems: map[string][]types.WriteRequest{
+				SOAR_ACTIONS_TABLE_NAME: writeRequests,
+			},
+		})
+		if err != nil {
+			lg.Error("Couldn't batch write items", "error", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func UpdateItemSOARAccounts(c *gin.Context, client *dynamodb.Client, lg *slog.Logger, ioc string, integration string, account string) error {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	if client == nil {
+		lg.Error("dynamodb client is nil")
+		return ErrNoDBClient
+	}
+
+	key := map[string]types.AttributeValue{
+		"IOC":         &types.AttributeValueMemberS{Value: ioc},
+		"Integration": &types.AttributeValueMemberS{Value: integration},
+	}
+
+	updateExpression := "SET Info.Accounts = list_append(if_not_exists(Info.Accounts, :empty_list), :new_account)"
+
+	_, err := client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:        &SOAR_ACTIONS_TABLE_NAME,
+		Key:              key,
+		UpdateExpression: &updateExpression,
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":new_account": &types.AttributeValueMemberL{
+				Value: []types.AttributeValue{
+					&types.AttributeValueMemberS{Value: account},
+				},
+			},
+			":empty_list": &types.AttributeValueMemberL{Value: []types.AttributeValue{}},
+		},
+	})
+
+	if err != nil {
+		lg.Error("Couldn't update item", "error", err)
+		return err
+	}
+
+	return nil
 }
