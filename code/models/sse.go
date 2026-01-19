@@ -1,8 +1,8 @@
 package models
 
 type SSEUploadRequestPayload struct {
-	IOC        string `json:"ioc" validate:"required"`
-	IncidentID string `json:"incident_id" validate:"required"`
+	IOCs       []string `json:"iocs" validate:"required,min=1,max=10"`
+	IncidentID string   `json:"incident_id" validate:"required"`
 }
 
 type SSEUploadResponsePayload struct {
@@ -16,4 +16,15 @@ type ZscalerAddPayload struct {
 	Addresses []string `json:"addresses"`
 	Type      string   `json:"type,omitempty"`
 	Name      string   `json:"name,omitempty"`
+}
+
+type SSEUploadSummary struct {
+	Total     int `json:"total"`
+	Succeeded int `json:"succeeded"`
+	Failed    int `json:"failed"`
+}
+
+type SSEUploadBatchResponsePayload struct {
+	Results []SSEUploadResponsePayload `json:"results"`
+	Summary SSEUploadSummary           `json:"summary"`
 }
