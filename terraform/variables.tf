@@ -172,3 +172,48 @@ variable "enc_zscaler_client_secret" {
   type        = string
   description = "Zscaler Client Secret for API integration"
 }
+
+variable "enc_cf_api_is_token" {
+  type        = string
+  description = "Cloudflare API token for API integration IS"
+}
+
+variable "enc_cf_api_sisudev_token" {
+  type        = string
+  description = "Cloudflare API token for API integration SISUDev"
+}
+
+variable "enc_cf_api_sisuprod_token" {
+  type        = string
+  description = "Cloudflare API token for API integration SISUProd"
+}
+
+variable "enc_cf_api_pricelineprod_token" {
+  type        = string
+  description = "Cloudflare API token for API integration PricelineProd"
+}
+
+variable "enc_cf_api_pricelinedev_token" {
+  type        = string
+  description = "Cloudflare API token for API integration PricelineDev"
+}
+
+variable "enc_cf_api_myapiprod_token" {
+  type        = string
+  description = "Cloudflare API token for API integration MyAPIProd"
+}
+
+variable "enc_cf_api_myapidev_token" {
+  type        = string
+  description = "Cloudflare API token for API integration MyAPIDev"
+}
+
+variable "enc_cf_api_madev_token" {
+  type        = string
+  description = "Cloudflare API token for API integration MADev"
+}
+
+variable "enc_cf_api_maprod_token" {
+  type        = string
+  description = "Cloudflare API token for API integration MAProd"
+}

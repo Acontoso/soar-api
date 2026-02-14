@@ -61,9 +61,9 @@ resource "null_resource" "go_compile" {
 
 data "archive_file" "code" {
   type        = "zip"
-  source_dir  = "${path.module}/../code"                 # Use code dir for Go application
-  output_path = "${path.root}/terraform/code.zip"        # Use absolute path for CI/CD reliability
-  excludes    = ["*.go", "go.mod", "go.sum", "tst.py"]   # Exclude source files, keep only bootstrap binary
+  source_dir  = "${path.module}/../code"               # Use code dir for Go application
+  output_path = "${path.root}/terraform/code.zip"      # Use absolute path for CI/CD reliability
+  excludes    = ["*.go", "go.mod", "go.sum", "tst.py"] # Exclude source files, keep only bootstrap binary
   depends_on  = [null_resource.go_compile]
 }
 

@@ -101,7 +101,7 @@ resource "aws_dynamodb_table" "actions_table" {
     projection_type = "ALL"
     range_key       = "Date"
   }
-  
+
   point_in_time_recovery {
     enabled = true
   }

@@ -86,11 +86,11 @@ data "aws_iam_policy_document" "api_gateway_resource_based_policy" {
     actions   = ["execute-api:Invoke"]
     resources = ["${aws_api_gateway_rest_api.gateway_object.execution_arn}/*/*/*"]
 
-    condition {
-      test     = "IpAddress"
-      variable = "aws:SourceIp"
-      values   = var.trusted_ip_list_api_gw
-    }
+    # condition {
+    #   test     = "IpAddress"
+    #   variable = "aws:SourceIp"
+    #   values   = var.trusted_ip_list_api_gw
+    # }
   }
 }
 

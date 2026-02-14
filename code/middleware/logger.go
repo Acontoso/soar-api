@@ -88,6 +88,7 @@ func newRequestID() string {
 // or the default logger when none is present.
 func GetLogger(c *gin.Context) *slog.Logger {
 	if v, ok := c.Get("logger"); ok {
+		// v is the stored value, but this is an interface{}, so we need to type assert it to *slog.Logger
 		if lg, ok2 := v.(*slog.Logger); ok2 {
 			return lg
 		}
