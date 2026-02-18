@@ -10,6 +10,7 @@ func SetupProtectedRoutes(app *appcontainer.App) {
 	tokenGroup.Use(middleware.CognitoAuthMiddleware())
 	tokenGroup.POST("/ipabusedb", app.IPLookup)
 	tokenGroup.POST("/anomali", app.AnomaliLookup)
+	tokenGroup.POST("/recordedfuture", app.RecordedFutureSOAR)
 	tokenGroupSOAR := app.Router.Group("/api/soar")
 	tokenGroupSOAR.Use(middleware.CognitoAuthMiddleware())
 	tokenGroupSOAR.POST("/sse/zscaler", app.SSEBlock)
@@ -17,4 +18,3 @@ func SetupProtectedRoutes(app *appcontainer.App) {
 	tokenGroupSOAR.POST("/datp/blockioc", app.DATPBlock)
 	tokenGroupSOAR.POST("/waf/blockip", app.CloudflareBlock)
 }
-

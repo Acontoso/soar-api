@@ -7,12 +7,12 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/Acontoso/soar-api/code/models"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gin-gonic/gin"
-	"github.com/Acontoso/soar-api/code/models"
 )
 
 // var IOC_TABLE_NAME string = os.Getenv("IOC_TABLE_NAME")
@@ -51,6 +51,21 @@ func getKeyIOC(ioc models.IOCTable) map[string]types.AttributeValue {
 	return map[string]types.AttributeValue{"IOC": IOC, "EnrichmentSource": Source}
 }
 
+func getKeysIOC(ioc models.IOCTableBatch) []map[string]types.AttributeValue {
+	keys := make([]map[string]types.AttributeValue, len(ioc.IOC))
+	EnrichmentSource, err := attributevalue.Marshal(ioc.EnrichmentSource)
+	if err != nil {
+		panic(err)
+	}
+	for i, ioc := range ioc.IOC {
+		keys[i] = map[string]types.AttributeValue{
+			"IOC":              &types.AttributeValueMemberS{Value: ioc},
+			"EnrichmentSource": EnrichmentSource,
+		}
+	}
+	return keys
+}
+
 func GetItemIOCFinder(c *gin.Context, client *dynamodb.Client, hash_key_value string, sort_key_value string, lg *slog.Logger) (*models.IOCTable, error) {
 	// use request context so timeouts/cancellation propagate
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
@@ -87,6 +102,50 @@ func GetItemIOCFinder(c *gin.Context, client *dynamodb.Client, hash_key_value st
 	return data, nil
 }
 
+func GetItemsIOCFinder(c *gin.Context, client *dynamodb.Client, hash_key_values []string, sort_key_value string, lg *slog.Logger) ([]models.IOCTable, error) {
+	// use request context so timeouts/cancellation propagate
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	if client == nil {
+		lg.Error("dynamodb client is nil")
+		return nil, ErrNoDBClient
+	}
+	//pointer since it will let you return nil if item not present
+	data := &models.IOCTableBatch{
+		IOC:              hash_key_values,
+		EnrichmentSource: sort_key_value,
+	}
+
+	resp, err := client.BatchGetItem(ctx, &dynamodb.BatchGetItemInput{
+		RequestItems: map[string]types.KeysAndAttributes{
+			IOC_TABLE_NAME: {
+				Keys: getKeysIOC(*data),
+			},
+		},
+	})
+	if err != nil {
+		lg.Error("Error pulling data from database", "error", err)
+		return nil, nil
+	}
+
+	if resp.Responses == nil || len(resp.Responses) == 0 {
+		return nil, ErrNotFound
+	}
+
+	var results []models.IOCTable
+	for _, item := range resp.Responses[IOC_TABLE_NAME] {
+		var record models.IOCTable
+		if err := attributevalue.UnmarshalMap(item, &record); err != nil {
+			lg.Error("Couldn't unmarshal response", "error", err)
+			continue
+		}
+		results = append(results, record)
+	}
+
+	return results, nil
+}
+
 func PutItemIOCFinder(c *gin.Context, client *dynamodb.Client, lg *slog.Logger, data *models.IOCTable) error {
 	// use request context so timeouts/cancellation propagate
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
@@ -106,6 +165,52 @@ func PutItemIOCFinder(c *gin.Context, client *dynamodb.Client, lg *slog.Logger, 
 		lg.Error("Couldn't add item to table. Here's why: %v\n", err)
 	}
 	return err
+}
+
+func PutItemsIOCFinder(c *gin.Context, client *dynamodb.Client, lg *slog.Logger, data []models.IOCTable) error {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	if client == nil {
+		lg.Error("dynamodb client is nil")
+		return ErrNoDBClient
+	}
+
+	const batchSize = 25
+
+	for i := 0; i < len(data); i += batchSize {
+		end := i + batchSize
+		if end > len(data) {
+			end = len(data)
+		}
+		batch := data[i:end]
+
+		writeRequests := make([]types.WriteRequest, len(batch))
+		for j, item := range batch {
+			marshaledItem, err := attributevalue.MarshalMap(item)
+			if err != nil {
+				lg.Error("Failed to marshal item", "error", err)
+				continue
+			}
+			writeRequests[j] = types.WriteRequest{
+				PutRequest: &types.PutRequest{
+					Item: marshaledItem,
+				},
+			}
+		}
+
+		_, err := client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+			RequestItems: map[string][]types.WriteRequest{
+				IOC_TABLE_NAME: writeRequests,
+			},
+		})
+		if err != nil {
+			lg.Error("Couldn't batch write items", "error", err)
+			return err
+		}
+	}
+
+	return nil
 }
 
 func getKeySOAR(ioc models.SOARTable) map[string]types.AttributeValue {

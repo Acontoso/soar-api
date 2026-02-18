@@ -44,6 +44,16 @@ resource "aws_ssm_parameter" "zscaler_client_secret" {
   tags        = local.tags
 }
 
+
+resource "aws_ssm_parameter" "recorded_future_api" {
+  name        = "/soar-api/recorded_future_api"
+  type        = "SecureString"
+  description = "Recorded Future API key for integration"
+  key_id      = data.aws_kms_key.ssm_kms_alias.id
+  value       = var.enc_recorded_future_api
+  tags        = local.tags
+}
+
 ########################Cloudflare API Tokens ########################
 resource "aws_ssm_parameter" "cf_is_token" {
   name        = "/soar-api/Instantscripts"

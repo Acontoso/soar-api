@@ -173,6 +173,11 @@ variable "enc_zscaler_client_secret" {
   description = "Zscaler Client Secret for API integration"
 }
 
+variable "enc_recorded_future_api" {
+  type        = string
+  description = "Recorded Future API key for integration"
+}
+
 variable "enc_cf_api_is_token" {
   type        = string
   description = "Cloudflare API token for API integration IS"

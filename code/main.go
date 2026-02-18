@@ -50,16 +50,18 @@ func main() {
 	abuseClient := services.NewAbuseIPDBClient()
 	anomaliClient := services.NewAnomaliClient()
 	zscalerClient := services.NewZscalerClient()
+	recordedFutureClient := services.NewFutureClient()
 
 	app := &appcontainer.App{
-		Router:    gin.New(),
-		Dynamo:    dynamoClient,
-		KMS:       kmsClient,
-		SSM:       ssmClient,
-		Cognito:   cognitoClient,
-		AbuseIPDB: abuseClient,
-		Anomali:   anomaliClient,
-		Zscaler:   zscalerClient,
+		Router:         gin.New(),
+		Dynamo:         dynamoClient,
+		KMS:            kmsClient,
+		SSM:            ssmClient,
+		Cognito:        cognitoClient,
+		AbuseIPDB:      abuseClient,
+		Anomali:        anomaliClient,
+		Zscaler:        zscalerClient,
+		RecordedFuture: recordedFutureClient,
 	}
 
 	app.Router.Use(middleware.JSONLogger(), gin.Recovery())

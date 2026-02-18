@@ -13,12 +13,13 @@ import (
 // Lets handlers access clients from container directly instread of passing into requests contexts
 // Single initialisation in main.go then passed to routes setup
 type App struct {
-	Router    *gin.Engine
-	Dynamo    *dynamodb.Client
-	KMS       *kms.Client
-	SSM       *ssm.Client
-	Cognito   *cognitoidentity.Client
-	AbuseIPDB *services.AbuseIPDBClient
-	Anomali   *services.AnomaliClient
-	Zscaler   *services.ZscalerClient
+	Router         *gin.Engine
+	Dynamo         *dynamodb.Client
+	KMS            *kms.Client
+	SSM            *ssm.Client
+	Cognito        *cognitoidentity.Client
+	AbuseIPDB      *services.AbuseIPDBClient
+	Anomali        *services.AnomaliClient
+	Zscaler        *services.ZscalerClient
+	RecordedFuture *services.FutureClient
 }
