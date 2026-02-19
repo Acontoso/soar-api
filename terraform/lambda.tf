@@ -106,7 +106,9 @@ data "aws_iam_policy_document" "lambda_custom_execution_policy" {
       "dynamodb:PutItem",
       "dynamodb:UpdateItem",
       "dynamodb:Query",
-      "dynamodb:GetItem"
+      "dynamodb:GetItem",
+      "dynamodb:BatchGetItem",
+      "dynamodb:BatchWriteItem"
     ]
     resources = [
       aws_dynamodb_table.ioc_table.arn,

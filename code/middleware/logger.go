@@ -11,6 +11,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func init() {
+	// Configure slog to use JSON handler so structured fields appear in CloudWatch
+	jsonHandler := slog.NewJSONHandler(os.Stdout, nil)
+	slog.SetDefault(slog.New(jsonHandler))
+}
+
 type RequestlogEntry struct {
 	Time      string  `json:"time"`
 	RequestID string  `json:"request_id,omitempty"`
