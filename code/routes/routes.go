@@ -9,6 +9,8 @@ func SetupProtectedRoutes(app *appcontainer.App) {
 	tokenGroup := app.Router.Group("/api/enrich")
 	tokenGroup.Use(middleware.CognitoAuthMiddleware())
 	tokenGroup.POST("/ipabusedb", app.IPLookup)
+	tokenGroup.POST("/ipabusedb/manual", app.ManualIPLookup)
+	tokenGroup.POST("/ipabusedb/create", app.ManualPutAbuseIP)
 	tokenGroup.POST("/anomali", app.AnomaliLookup)
 	tokenGroup.POST("/recordedfuture", app.RecordedFutureSOAR)
 	tokenGroupSOAR := app.Router.Group("/api/soar")

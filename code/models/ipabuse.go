@@ -1,29 +1,19 @@
 package models
 
-import (
-	"net/http"
-	"time"
-)
-
 type ClientAbuseIPRequestPayload struct {
 	IP         string `json:"ip" validate:"required"`
 	IncidentID string `json:"incident_id" validate:"required"`
 }
 
 type ClientAbuseIPResponsePayload struct {
-	Confidence  string `json:"confidence"`
-	Country     string `json:"country"`
-	ReportCount int    `json:"report_count"`
-	TOR         bool   `json:"tor"`
-	Private     bool   `json:"private"`
-	IOC         string `json:"ioc"`
-}
-
-// AbuseIPDBClient wraps HTTP access to the AbuseIPDB API with timeouts.
-type AbuseIPDBClient struct {
-	HTTP    *http.Client
-	BaseURL string
-	Timeout time.Duration
+	Confidence           string `json:"confidence"`
+	AbuseConfidenceScore int    `json:"abuse_confidence_score"`
+	Country              string `json:"country"`
+	ReportCount          int    `json:"report_count"`
+	TOR                  bool   `json:"tor"`
+	Private              bool   `json:"private"`
+	IOC                  string `json:"ioc"`
+	Exists               bool   `json:"exists,omitempty"`
 }
 
 // AbuseIPDBResponse models the subset of fields we care about.
@@ -36,4 +26,18 @@ type AbuseIPDBResponse struct {
 		CountryCode          string `json:"countryCode"`
 		Usage                string `json:"usageType"`
 	} `json:"data"`
+}
+
+type ManualLookupIPRequestPayload struct {
+	IP string `json:"ip" validate:"required"`
+}
+
+type ManualAddAbuseIPPayload struct {
+	IP                   string `json:"ip" validate:"required"`
+	Public               bool   `json:"public" validate:"required"`
+	AbuseConfidenceScore int    `json:"abuse_confidence_score" validate:"required"`
+	Country              string `json:"country" validate:"required"`
+	CountryCode          string `json:"country_code" validate:"required"`
+	ReportCount          int    `json:"report_count" validate:"required"`
+	IncidentID           string `json:"incident_id" validate:"required"`
 }
