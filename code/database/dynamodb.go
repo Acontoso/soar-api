@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/Acontoso/soar-api/code/models"
@@ -15,14 +16,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// var IOC_TABLE_NAME string = os.Getenv("IOC_TABLE_NAME")
-var IOC_TABLE_NAME string = "ioc-finder"
-var IOC_TABLE_HASH_KEY string = "IOC"
-var IOC_TABLE_SORT_KEY string = "EnrichmentSource"
+var IOC_TABLE_NAME string = os.Getenv("IOC_TABLE_NAME")
+var IOC_TABLE_HASH_KEY string = os.Getenv("IOC_TABLE_HASH_KEY")
+var IOC_TABLE_SORT_KEY string = os.Getenv("IOC_TABLE_SORT_KEY")
 
-var SOAR_ACTIONS_TABLE_NAME string = "soar-actions"
-var SOAR_ACTIONS_TABLE_HASH_KEY string = "IOC"
-var SOAR_ACTIONS_SORT_KEY string = "Integration"
+var SOAR_ACTIONS_TABLE_NAME string = os.Getenv("SOAR_ACTIONS_TABLE_NAME")
+var SOAR_ACTIONS_TABLE_HASH_KEY string = os.Getenv("SOAR_ACTIONS_TABLE_HASH_KEY")
+var SOAR_ACTIONS_SORT_KEY string = os.Getenv("SOAR_ACTIONS_SORT_KEY")
 
 var (
 	ErrNotFound   = errors.New("Item not found")
@@ -87,10 +87,10 @@ func GetItemIOCFinder(c *gin.Context, client *dynamodb.Client, hash_key_value st
 	})
 	if err != nil {
 		lg.Error("Error pulling data from database", "error", err)
-		return nil, nil
+		return nil, err
 	}
 
-	if resp.Item == nil || len(resp.Item) == 0 {
+	if len(resp.Item) == 0 {
 		return nil, ErrNotFound
 	}
 
@@ -98,6 +98,7 @@ func GetItemIOCFinder(c *gin.Context, client *dynamodb.Client, hash_key_value st
 		lg.Error("Couldn't unmarshal response", "error", err)
 		return nil, err
 	}
+	lg.Info("Database hit for IOC", "IOC", data.IOC, "Source", data.EnrichmentSource)
 
 	return data, nil
 }
@@ -126,10 +127,10 @@ func GetItemsIOCFinder(c *gin.Context, client *dynamodb.Client, hash_key_values 
 	})
 	if err != nil {
 		lg.Error("Error pulling data from database", "error", err)
-		return nil, nil
+		return nil, err
 	}
 
-	if resp.Responses == nil || len(resp.Responses) == 0 {
+	if len(resp.Responses) == 0 {
 		return nil, ErrNotFound
 	}
 
@@ -140,9 +141,9 @@ func GetItemsIOCFinder(c *gin.Context, client *dynamodb.Client, hash_key_values 
 			lg.Error("Couldn't unmarshal response", "error", err)
 			continue
 		}
+		lg.Info("Database hit for IOC", "IOC", record.IOC, "Source", record.EnrichmentSource)
 		results = append(results, record)
 	}
-
 	return results, nil
 }
 
@@ -162,7 +163,9 @@ func PutItemIOCFinder(c *gin.Context, client *dynamodb.Client, lg *slog.Logger, 
 		Item:      item,
 	})
 	if err != nil {
-		lg.Error("Couldn't add item to table. Here's why: %v\n", err)
+		lg.Error("Couldn't add item to table", "error", err)
+	} else {
+		lg.Info("Database record added for IOC", "IOC", data.IOC, "Source", data.EnrichmentSource)
 	}
 	return err
 }
@@ -177,29 +180,36 @@ func PutItemsIOCFinder(c *gin.Context, client *dynamodb.Client, lg *slog.Logger,
 	}
 
 	const batchSize = 25
-
+	// PutItems function has a max batch size of 25, so we need to split our data into batches if we have more than 25 items to add. This loop handles that batching logic.
 	for i := 0; i < len(data); i += batchSize {
 		end := i + batchSize
+		// If the end index exceeds the length of the data slice, we set it to the length of the data slice to avoid an out-of-range error.
 		if end > len(data) {
 			end = len(data)
 		}
+		// We then take a slice of the data for the current batch.
 		batch := data[i:end]
 
-		writeRequests := make([]types.WriteRequest, len(batch))
-		for j, item := range batch {
+		writeRequests := make([]types.WriteRequest, 0, len(batch))
+		marshaledRecords := make([]models.IOCTable, 0, len(batch))
+		for _, item := range batch {
 			marshaledItem, err := attributevalue.MarshalMap(item)
 			if err != nil {
 				lg.Error("Failed to marshal item", "error", err)
 				continue
 			}
-			writeRequests[j] = types.WriteRequest{
+			writeRequests = append(writeRequests, types.WriteRequest{
 				PutRequest: &types.PutRequest{
 					Item: marshaledItem,
 				},
-			}
+			})
+			marshaledRecords = append(marshaledRecords, item)
+		}
+		if len(writeRequests) == 0 {
+			continue
 		}
 
-		_, err := client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+		resp, err := client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
 			RequestItems: map[string][]types.WriteRequest{
 				IOC_TABLE_NAME: writeRequests,
 			},
@@ -207,6 +217,26 @@ func PutItemsIOCFinder(c *gin.Context, client *dynamodb.Client, lg *slog.Logger,
 		if err != nil {
 			lg.Error("Couldn't batch write items", "error", err)
 			return err
+		}
+
+		unprocessed := make(map[string]struct{})
+		for _, request := range resp.UnprocessedItems[IOC_TABLE_NAME] {
+			if request.PutRequest == nil {
+				continue
+			}
+			iocAttr, iocOk := request.PutRequest.Item["IOC"].(*types.AttributeValueMemberS)
+			sourceAttr, sourceOk := request.PutRequest.Item["EnrichmentSource"].(*types.AttributeValueMemberS)
+			if !iocOk || !sourceOk {
+				continue
+			}
+			unprocessed[iocAttr.Value+"|"+sourceAttr.Value] = struct{}{}
+		}
+
+		for _, item := range marshaledRecords {
+			if _, exists := unprocessed[item.IOC+"|"+item.EnrichmentSource]; exists {
+				continue
+			}
+			lg.Info("Database record added for IOC", "IOC", item.IOC, "Source", item.EnrichmentSource)
 		}
 	}
 
@@ -261,10 +291,10 @@ func GetItemSOAR(c *gin.Context, client *dynamodb.Client, hash_key_value string,
 	})
 	if err != nil {
 		lg.Error("Error pulling data from database", "error", err)
-		return nil, nil
+		return nil, err
 	}
 
-	if resp.Item == nil || len(resp.Item) == 0 {
+	if len(resp.Item) == 0 {
 		return nil, ErrNotFound
 	}
 
@@ -272,6 +302,7 @@ func GetItemSOAR(c *gin.Context, client *dynamodb.Client, hash_key_value string,
 		lg.Error("Couldn't unmarshal response", "error", err)
 		return nil, err
 	}
+	lg.Info("Database hit for IOC", "IOC", data.IOC, "Source", data.Integration)
 
 	return data, nil
 }
@@ -292,7 +323,9 @@ func PutItemSOAR(c *gin.Context, client *dynamodb.Client, lg *slog.Logger, data 
 		Item:      item,
 	})
 	if err != nil {
-		lg.Error("Couldn't add item to table. Here's why: %v\n", err)
+		lg.Error("Couldn't add item to table", "error", err)
+	} else {
+		lg.Info("Database record added for IOC", "IOC", data.IOC, "Integration", data.Integration)
 	}
 	return err
 }
@@ -321,10 +354,10 @@ func GetItemsSOAR(c *gin.Context, client *dynamodb.Client, hash_key_values []str
 	})
 	if err != nil {
 		lg.Error("Error pulling data from database", "error", err)
-		return nil, nil
+		return nil, err
 	}
 
-	if resp.Responses == nil || len(resp.Responses) == 0 {
+	if len(resp.Responses) == 0 {
 		return nil, ErrNotFound
 	}
 
@@ -335,6 +368,7 @@ func GetItemsSOAR(c *gin.Context, client *dynamodb.Client, hash_key_values []str
 			lg.Error("Couldn't unmarshal response", "error", err)
 			continue
 		}
+		lg.Info("Database hit for IOC", "IOC", record.IOC, "Integration", record.Integration)
 		results = append(results, record)
 	}
 
@@ -359,21 +393,27 @@ func PutItemsSOAR(c *gin.Context, client *dynamodb.Client, lg *slog.Logger, data
 		}
 		batch := data[i:end]
 
-		writeRequests := make([]types.WriteRequest, len(batch))
-		for j, item := range batch {
+		writeRequests := make([]types.WriteRequest, 0, len(batch))
+		marshaledRecords := make([]models.SOARTable, 0, len(batch))
+		for _, item := range batch {
 			marshaledItem, err := attributevalue.MarshalMap(item)
 			if err != nil {
 				lg.Error("Failed to marshal item", "error", err)
 				continue
 			}
-			writeRequests[j] = types.WriteRequest{
+			writeRequests = append(writeRequests, types.WriteRequest{
 				PutRequest: &types.PutRequest{
 					Item: marshaledItem,
 				},
-			}
+			})
+			marshaledRecords = append(marshaledRecords, item)
 		}
 
-		_, err := client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+		if len(writeRequests) == 0 {
+			continue
+		}
+
+		resp, err := client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
 			RequestItems: map[string][]types.WriteRequest{
 				SOAR_ACTIONS_TABLE_NAME: writeRequests,
 			},
@@ -381,6 +421,26 @@ func PutItemsSOAR(c *gin.Context, client *dynamodb.Client, lg *slog.Logger, data
 		if err != nil {
 			lg.Error("Couldn't batch write items", "error", err)
 			return err
+		}
+
+		unprocessed := make(map[string]struct{})
+		for _, request := range resp.UnprocessedItems[SOAR_ACTIONS_TABLE_NAME] {
+			if request.PutRequest == nil {
+				continue
+			}
+			iocAttr, iocOk := request.PutRequest.Item["IOC"].(*types.AttributeValueMemberS)
+			integrationAttr, integrationOk := request.PutRequest.Item["Integration"].(*types.AttributeValueMemberS)
+			if !iocOk || !integrationOk {
+				continue
+			}
+			unprocessed[iocAttr.Value+"|"+integrationAttr.Value] = struct{}{}
+		}
+
+		for _, item := range marshaledRecords {
+			if _, exists := unprocessed[item.IOC+"|"+item.Integration]; exists {
+				continue
+			}
+			lg.Info("Database record added for IOC", "IOC", item.IOC, "Integration", item.Integration)
 		}
 	}
 
@@ -400,7 +460,7 @@ func UpdateItemSOARAccounts(c *gin.Context, client *dynamodb.Client, lg *slog.Lo
 		"IOC":         &types.AttributeValueMemberS{Value: ioc},
 		"Integration": &types.AttributeValueMemberS{Value: integration},
 	}
-
+	// The ":" are placeholder values that are replaced during the update. This allows us to append to the Accounts list without needing to know its current value, and also handles the case where Accounts doesn't exist yet (using if_not_exists).
 	updateExpression := "SET Info.Accounts = list_append(if_not_exists(Info.Accounts, :empty_list), :new_account)"
 
 	_, err := client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
@@ -421,6 +481,6 @@ func UpdateItemSOARAccounts(c *gin.Context, client *dynamodb.Client, lg *slog.Lo
 		lg.Error("Couldn't update item", "error", err)
 		return err
 	}
-
+	lg.Info("Database record updated for SOAR action", "Account Added", account)
 	return nil
 }

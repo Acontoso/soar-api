@@ -2,16 +2,17 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"slices"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/Acontoso/soar-api/code/database"
 	"github.com/Acontoso/soar-api/code/middleware"
 	"github.com/Acontoso/soar-api/code/models"
 	"github.com/Acontoso/soar-api/code/services"
+	"github.com/gin-gonic/gin"
 )
 
 type CloudflareIOCResult struct {
@@ -25,7 +26,7 @@ func (a *App) CloudflareBlock(c *gin.Context) {
 	var cloudflareBlockIP models.CloudflareBlockIPRequestPayload
 	lg := middleware.GetLogger(c)
 	lg.Info("Cloudflare Block IOC", "path", c.FullPath())
-	if err := c.ShouldBindJSON(&cloudflareBlockIP); err != nil {
+	if err := strictBindJSON(c, &cloudflareBlockIP); err != nil {
 		lg.Error("Error, failed to deserialise into JSON", "error", err)
 		c.JSON(400, gin.H{"Error": "Payload failed to deserialise into JSON"})
 		return
@@ -40,8 +41,12 @@ func (a *App) CloudflareBlock(c *gin.Context) {
 	accounts := cloudflareBlockIP.AccountNames
 
 	existingData, err := database.GetItemsSOAR(c, a.Dynamo, iocs, "Cloudflare", lg)
-	if err != nil {
+	if errors.Is(err, database.ErrNotFound) {
 		lg.Info("No existing records found in Database for IOCs in Cloudflare")
+	} else if err != nil {
+		lg.Error("failed to read existing Cloudflare IOCs from database", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
 	}
 
 	// Build a map of found IOCs for quick lookup
@@ -59,7 +64,7 @@ func (a *App) CloudflareBlock(c *gin.Context) {
 			// Passes the result /value back to a channel, if there is blockage here the program will hang.
 			// Critical: The number of goroutines must match the number of times you read from the channel
 			results <- CloudflareIOCResult{Response: result, Error: err}
-		}(account) //straight away called by go func(), anon function in this case.
+		}(string(account)) //straight away called by go func(), anon function in this case.
 	}
 	var responses []models.CloudflareBlockIPResponsePayload
 	successCount := 0

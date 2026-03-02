@@ -2,17 +2,18 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/netip"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/Acontoso/soar-api/code/database"
 	"github.com/Acontoso/soar-api/code/middleware"
 	"github.com/Acontoso/soar-api/code/models"
 	"github.com/Acontoso/soar-api/code/services"
+	"github.com/gin-gonic/gin"
 )
 
 type SSEIOCResult struct {
@@ -28,7 +29,7 @@ func (a *App) SSEBlock(c *gin.Context) {
 	var sseUpload models.SSEUploadRequestPayload
 	lg := middleware.GetLogger(c)
 	lg.Info("Zscaler Block IOC", "path", c.FullPath())
-	if err := c.ShouldBindJSON(&sseUpload); err != nil {
+	if err := strictBindJSON(c, &sseUpload); err != nil {
 		lg.Error("Error, failed to deserialise into JSON", "error", err)
 		c.JSON(400, gin.H{"Error": "Payload failed to deserialise into JSON"})
 		return
@@ -122,8 +123,16 @@ func (a *App) SSEBlock(c *gin.Context) {
 
 func (a *App) blockSingleIOC(c *gin.Context, ioc string, incidentId string, accessToken string, lg *slog.Logger) (models.SSEUploadResponsePayload, error) {
 	data, err := database.GetItemSOAR(c, a.Dynamo, ioc, "Zscaler", lg)
-	if err != nil {
+	if errors.Is(err, database.ErrNotFound) {
 		lg.Info("Record not found in Database for IOC", "ioc", ioc)
+	} else if err != nil {
+		lg.Error("failed to read IOC from database", "error", err, "ioc", ioc)
+		return models.SSEUploadResponsePayload{
+			Added:       false,
+			IOC:         ioc,
+			Integration: "Zscaler",
+			Action:      "Failed",
+		}, fmt.Errorf("database error for IOC %s", ioc)
 	}
 	if data != nil {
 		lg.Info("Existing record found for IOC", "ioc", ioc)

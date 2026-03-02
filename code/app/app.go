@@ -1,6 +1,10 @@
 package app
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
+
 	"github.com/Acontoso/soar-api/code/services"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentity"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -22,4 +26,22 @@ type App struct {
 	Anomali        *services.AnomaliClient
 	Zscaler        *services.ZscalerClient
 	RecordedFuture *services.FutureClient
+}
+
+func strictBindJSON(c *gin.Context, dst any) error {
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return errors.New("payload must contain only one JSON object")
+		}
+		return err
+	}
+
+	return nil
 }

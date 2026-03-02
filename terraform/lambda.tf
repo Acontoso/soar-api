@@ -31,15 +31,15 @@ resource "aws_lambda_function" "lambda" {
   }
   environment {
     variables = {
-      "TABLE"                = var.dynamodb_table
-      "PARTITION_KEY"        = var.dynamodb_primary_key
-      "SORT_KEY"             = var.dynamodb_sort_key
-      "ACTION_TABLE"         = var.dynamodb_table_name_actions
-      "ACTION_PARTITION_KEY" = var.dynamodb_primary_key_actions
-      "ACTION_SORT_KEY"      = var.dynamodb_sort_key_actions
-      "TENANT_ID"            = var.ms_tenant_id
-      "IDENTITY_POOL_ID"     = var.identity_pool_id
-      "IDENTITY_POOL_LOGIN"  = var.identity_pool_login
+      "IOC_TABLE_NAME"              = var.dynamodb_table
+      "IOC_TABLE_HASH_KEY"          = var.dynamodb_primary_key
+      "IOC_TABLE_SORT_KEY"          = var.dynamodb_sort_key
+      "SOAR_ACTIONS_TABLE_NAME"     = var.dynamodb_table_name_actions
+      "SOAR_ACTIONS_TABLE_HASH_KEY" = var.dynamodb_primary_key_actions
+      "SOAR_ACTIONS_SORT_KEY"       = var.dynamodb_sort_key_actions
+      "TENANT_ID"                   = var.ms_tenant_id
+      "IDENTITY_POOL_ID"            = var.identity_pool_id
+      "IDENTITY_POOL_LOGIN"         = var.identity_pool_login
     }
   }
   depends_on = [null_resource.upload_lambda_zip]

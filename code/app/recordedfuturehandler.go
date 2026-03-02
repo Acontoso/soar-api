@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -18,10 +19,10 @@ func (a *App) RecordedFutureSOAR(c *gin.Context) {
 	var failureCount int = 0
 	var recordedFutureSOAR models.RecordSOARRequestPayload
 	lg := middleware.GetLogger(c)
-	lg.Info("Recorded Future SOAR", "path", c.FullPath())
-	if err := c.ShouldBindJSON(&recordedFutureSOAR); err != nil {
+	lg.Info("Recorded Future SOAR endpoint hit", "path", c.FullPath())
+	if err := strictBindJSON(c, &recordedFutureSOAR); err != nil {
 		lg.Error("Error, failed to deserialise into JSON", "error", err)
-		c.JSON(400, gin.H{"Error": "Payload failed to deserialise into JSON"})
+		c.JSON(http.StatusBadRequest, gin.H{"Error": "Payload failed to deserialise into JSON"})
 		return
 	}
 	if err := validate.Struct(recordedFutureSOAR); err != nil {
@@ -51,9 +52,14 @@ func (a *App) RecordedFutureSOAR(c *gin.Context) {
 
 	if len(ips) > 0 {
 		data, err := database.GetItemsIOCFinder(c, a.Dynamo, ips, "RecordedFuture", lg)
-		if err != nil {
-			lg.Info("No existing records found in Database for IPs in Recorded Future")
+		if errors.Is(err, database.ErrNotFound) {
+			lg.Info("No existing records found in Database for IPs in Recorded Future", "error", err)
+		} else if err != nil {
+			lg.Error("Failed to read cached IPs from database", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			return
 		} else {
+			lg.Info("Existing records found in Database for IPs in Recorded Future", "path", c.FullPath())
 			existingData = append(existingData, data...)
 			for _, record := range data {
 				foundIOCs[record.IOC] = true
@@ -63,9 +69,14 @@ func (a *App) RecordedFutureSOAR(c *gin.Context) {
 
 	if len(domains) > 0 {
 		data, err := database.GetItemsIOCFinder(c, a.Dynamo, domains, "RecordedFuture", lg)
-		if err != nil {
-			lg.Info("No existing records found in Database for Domains in Recorded Future")
+		if errors.Is(err, database.ErrNotFound) {
+			lg.Info("No existing records found in Database for Domains in Recorded Future", "error", err)
+		} else if err != nil {
+			lg.Error("Failed to read cached domains from database", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			return
 		} else {
+			lg.Info("Existing records found in Database for Domains in Recorded Future", "path", c.FullPath())
 			existingData = append(existingData, data...)
 			for _, record := range data {
 				foundIOCs[record.IOC] = true
@@ -75,9 +86,14 @@ func (a *App) RecordedFutureSOAR(c *gin.Context) {
 
 	if len(hashes) > 0 {
 		data, err := database.GetItemsIOCFinder(c, a.Dynamo, hashes, "RecordedFuture", lg)
-		if err != nil {
-			lg.Info("No existing records found in Database for Hashes in Recorded Future")
+		if errors.Is(err, database.ErrNotFound) {
+			lg.Info("No existing records found in Database for Hashes in Recorded Future", "error", err)
+		} else if err != nil {
+			lg.Error("Failed to read cached hashes from database", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			return
 		} else {
+			lg.Info("Existing records found in Database for Hashes in Recorded Future", "path", c.FullPath())
 			existingData = append(existingData, data...)
 			for _, record := range data {
 				foundIOCs[record.IOC] = true

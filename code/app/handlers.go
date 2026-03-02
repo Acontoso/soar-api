@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/netip"
 	"time"
@@ -22,7 +23,7 @@ func (a *App) AnomaliLookup(c *gin.Context) {
 	var anomaliLookup models.AnomaliRequestPayload
 	lg := middleware.GetLogger(c)
 	lg.Info("anomali lookup", "path", c.FullPath())
-	if err := c.ShouldBindJSON(&anomaliLookup); err != nil {
+	if err := strictBindJSON(c, &anomaliLookup); err != nil {
 		lg.Error("Error, failed to deserialise into JSON", "error", err)
 		c.JSON(400, gin.H{"Error": "Payload failed to deserialise into JSON"})
 		return
@@ -35,8 +36,12 @@ func (a *App) AnomaliLookup(c *gin.Context) {
 	ioc := anomaliLookup.IOC
 	incidentId := anomaliLookup.IncidentID
 	data, err := database.GetItemIOCFinder(c, a.Dynamo, ioc, "Anomali", lg)
-	if err != nil {
+	if errors.Is(err, database.ErrNotFound) {
 		lg.Info("Record not found in Database for IOC", "ioc", ioc)
+	} else if err != nil {
+		lg.Error("failed to read IOC from database", "error", err, "ioc", ioc)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
 	}
 	if data != nil {
 		lg.Info("Existing record found for IOC", "ioc", ioc)
@@ -117,7 +122,7 @@ func (a *App) CABlock(c *gin.Context) {
 	var calist models.AzureADCARequestPayload
 	lg := middleware.GetLogger(c)
 	lg.Info("Conditional Access Block IP", "path", c.FullPath())
-	if err := c.ShouldBindJSON(&calist); err != nil {
+	if err := strictBindJSON(c, &calist); err != nil {
 		lg.Error("Error, failed to deserialise into JSON", "error", err)
 		c.JSON(400, gin.H{"Error": "Payload failed to deserialise into JSON"})
 		return
@@ -132,8 +137,12 @@ func (a *App) CABlock(c *gin.Context) {
 	tenantID := calist.TenantID
 	listID := calist.ListID
 	data, err := database.GetItemSOAR(c, a.Dynamo, ioc, "AzureAD", lg)
-	if err != nil {
+	if errors.Is(err, database.ErrNotFound) {
 		lg.Info("Record not found in Database for IOC", "ioc", ioc)
+	} else if err != nil {
+		lg.Error("failed to read SOAR IOC from database", "error", err, "ioc", ioc)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
 	}
 	if data != nil {
 		lg.Info("Existing record found for IOC", "ioc", ioc)
@@ -202,7 +211,7 @@ func (a *App) DATPBlock(c *gin.Context) {
 	var datp models.DATPUploadRequestPayload
 	lg := middleware.GetLogger(c)
 	lg.Info("DATP Block IOC", "path", c.FullPath())
-	if err := c.ShouldBindJSON(&datp); err != nil {
+	if err := strictBindJSON(c, &datp); err != nil {
 		lg.Error("Error, failed to deserialise into JSON", "error", err)
 		c.JSON(400, gin.H{"Error": "Payload failed to deserialise into JSON"})
 		return
@@ -217,8 +226,12 @@ func (a *App) DATPBlock(c *gin.Context) {
 	tenantID := datp.TenantID
 	action := datp.Action
 	data, err := database.GetItemSOAR(c, a.Dynamo, ioc, "DATP", lg)
-	if err != nil {
+	if errors.Is(err, database.ErrNotFound) {
 		lg.Info("Record not found in Database for IOC", "ioc", ioc)
+	} else if err != nil {
+		lg.Error("failed to read SOAR IOC from database", "error", err, "ioc", ioc)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
 	}
 	if data != nil {
 		lg.Info("Existing record found for IOC", "ioc", ioc)

@@ -13,6 +13,7 @@ import (
 
 func init() {
 	// Configure slog to use JSON handler so structured fields appear in CloudWatch
+	// The init function gets called when the package is imported, setting up the logger for the entire application
 	jsonHandler := slog.NewJSONHandler(os.Stdout, nil)
 	slog.SetDefault(slog.New(jsonHandler))
 }
@@ -58,7 +59,7 @@ func JSONLogger() gin.HandlerFunc {
 		entry := RequestlogEntry{
 			Time:      start.Format(time.RFC3339Nano),
 			RequestID: reqID,
-			ClientIP:  c.ClientIP(),
+			ClientIP:  c.RemoteIP(),
 			Method:    c.Request.Method,
 			Path:      path,
 			Status:    c.Writer.Status(),
@@ -94,7 +95,6 @@ func newRequestID() string {
 // or the default logger when none is present.
 func GetLogger(c *gin.Context) *slog.Logger {
 	if v, ok := c.Get("logger"); ok {
-		// v is the stored value, but this is an interface{}, so we need to type assert it to *slog.Logger
 		if lg, ok2 := v.(*slog.Logger); ok2 {
 			return lg
 		}

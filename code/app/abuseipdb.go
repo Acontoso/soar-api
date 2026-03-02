@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/netip"
 	"time"
@@ -18,7 +19,7 @@ func (a *App) IPLookup(c *gin.Context) {
 	var abuseIp models.ClientAbuseIPRequestPayload
 	lg := middleware.GetLogger(c)
 	lg.Info("ip lookup", "path", c.FullPath())
-	if err := c.ShouldBindJSON(&abuseIp); err != nil {
+	if err := strictBindJSON(c, &abuseIp); err != nil {
 		c.JSON(400, gin.H{"Error, failed to deserialise into JSON": err.Error()})
 		return
 	}
@@ -48,8 +49,12 @@ func (a *App) IPLookup(c *gin.Context) {
 		return
 	}
 	data, err := database.GetItemIOCFinder(c, a.Dynamo, ip, "IPAbuseDB", lg)
-	if err == nil {
+	if errors.Is(err, database.ErrNotFound) {
 		lg.Info("Record not found in Database for IOC", "ip", ip)
+	} else if err != nil {
+		lg.Error("failed to read IOC from database", "error", err, "ip", ip)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
 	}
 	if data != nil {
 		info := data.Info
@@ -128,7 +133,7 @@ func (a *App) ManualIPLookup(c *gin.Context) {
 	var abuseIp models.ManualLookupIPRequestPayload
 	lg := middleware.GetLogger(c)
 	lg.Info("ip manual lookup", "path", c.FullPath())
-	if err := c.ShouldBindJSON(&abuseIp); err != nil {
+	if err := strictBindJSON(c, &abuseIp); err != nil {
 		c.JSON(400, gin.H{"Error, failed to deserialise into JSON": err.Error()})
 		return
 	}
@@ -156,8 +161,12 @@ func (a *App) ManualIPLookup(c *gin.Context) {
 		return
 	}
 	data, err := database.GetItemIOCFinder(c, a.Dynamo, ip, "IPAbuseDB", lg)
-	if err == nil {
+	if errors.Is(err, database.ErrNotFound) {
 		lg.Info("Record not found in Database for IOC", "ip", ip)
+	} else if err != nil {
+		lg.Error("failed to read IOC from database", "error", err, "ip", ip)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
 	}
 	if data != nil {
 		info := data.Info
@@ -198,7 +207,7 @@ func (a *App) ManualPutAbuseIP(c *gin.Context) {
 	var abuseIp models.ManualAddAbuseIPPayload
 	lg := middleware.GetLogger(c)
 	lg.Info("Manual Abuse IP add", "path", c.FullPath())
-	if err := c.ShouldBindJSON(&abuseIp); err != nil {
+	if err := strictBindJSON(c, &abuseIp); err != nil {
 		c.JSON(400, gin.H{"Error, failed to deserialise into JSON": err.Error()})
 		return
 	}
