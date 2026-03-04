@@ -222,3 +222,33 @@ variable "enc_cf_api_maprod_token" {
   type        = string
   description = "Cloudflare API token for API integration MAProd"
 }
+
+variable "tenant_id" {
+  type        = string
+  description = "Microsoft Tenant ID used for authentication to the gateway"
+}
+
+variable "audience_values" {
+  type        = list(string)
+  description = "List of audience values used for authentication to the gateway"
+}
+
+variable "gateway_name" {
+  type        = string
+  description = "Name of the gateway"
+}
+
+variable "gateway_description" {
+  type        = string
+  description = "Description of the gateway"
+}
+
+variable "authorization_type" {
+  type        = string
+  description = "Authorization type used to authenticate to the gateway"
+}
+
+variable "arn_oauth_outbound_provider" {
+  type        = string
+  description = "ARN of the OAuth outbound provider used to authenticate to the gateway"
+}

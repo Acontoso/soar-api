@@ -17,11 +17,10 @@ resource "aws_api_gateway_resource" "proxy_resource" {
 }
 
 resource "aws_api_gateway_method" "proxy_method_lambda" {
-  #checkov:skip=CKV2_AWS_53: "Ensure AWS API gateway request is validated" -> Done at the application layer (Lambda)
   rest_api_id          = aws_api_gateway_rest_api.gateway_object.id
   resource_id          = aws_api_gateway_resource.proxy_resource.id
   http_method          = "ANY"
-  api_key_required     = true
+  api_key_required     = false
   authorization        = "COGNITO_USER_POOLS"
   authorizer_id        = aws_api_gateway_authorizer.cognito_authorizer.id
   authorization_scopes = ["soar-api/admin.readwrite.all"]
@@ -51,27 +50,10 @@ resource "aws_api_gateway_deployment" "single_deployment" {
 }
 
 resource "aws_api_gateway_stage" "core_stage" {
-  #checkov:skip=CKV_AWS_120: "Ensure API Gateway caching is enabled" - No caching needed for this API gateway
-  #checkov:skip=CKV_AWS_73: "Ensure API Gateway has X-Ray Tracing enabled"
-  #checkov:skip=CKV_AWS_76: "Ensure API Gateway has Access Logging enabled" - This is done at the application level, no need at the moment
-  #checkov:skip=CKV2_AWS_29: "Ensure public API gateway are protected by WAF" - Not needed currently, will eventually be behind Cloudflare WAF. Gateway locked down via IP & authenticated requests that includes rate limiting
-  #checkov:skip=CKV2_AWS_4: "Ensure API Gateway stage have logging level defined as appropriate" - Done currently at application layer
-  #checkov:skip=CKV2_AWS_51: "Ensure AWS API Gateway endpoints uses client certificate authentication
-  #Todo, access logs configuration
   rest_api_id   = aws_api_gateway_rest_api.gateway_object.id
   stage_name    = var.stage_name_api_gateway
   deployment_id = aws_api_gateway_deployment.single_deployment.id
   tags          = local.tags
-}
-
-resource "aws_api_gateway_usage_plan_key" "key_assign_usage_plan" {
-  key_id        = aws_api_gateway_api_key.apikey_tf.id
-  key_type      = "API_KEY"
-  usage_plan_id = aws_api_gateway_usage_plan.default_usage_plan.id
-}
-
-resource "aws_api_gateway_api_key" "apikey_tf" {
-  name = "core-key"
 }
 
 data "aws_iam_policy_document" "api_gateway_resource_based_policy" {
