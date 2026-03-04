@@ -31,8 +31,11 @@ components:
         - error
 
     HealthResponse:
-      type: string
-      example: API is healthy!
+      type: object
+      properties:
+        message:
+          type: string
+          example: "API is healthy!"
 
     # ========================
     # Anomali Models
@@ -527,6 +530,7 @@ security:
 paths:
   /:
     get:
+      operationId: getHealthRoot
       summary: Health check endpoint
       description: Returns a simple health status message
       tags:
@@ -536,12 +540,13 @@ paths:
         '200':
           description: API is healthy
           content:
-            text/plain:
+            application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
 
   /health:
     get:
+      operationId: getHealth
       summary: Health check endpoint
       description: Returns a simple health status message
       tags:
@@ -551,12 +556,13 @@ paths:
         '200':
           description: API is healthy
           content:
-            text/plain:
+            application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
 
   /api/enrich/ipabusedb:
     post:
+      operationId: lookupIPAbuseDB
       summary: Lookup IP in AbuseIPDB
       description: Enriches an IP address by checking it against the AbuseIPDB database. Returns abuse confidence score and associated metadata. Requires valid IP address (public IPs only).
       tags:
@@ -596,6 +602,7 @@ paths:
 
   /api/enrich/ipabusedb/manual:
     post:
+      operationId: manualLookupIPAbuseDB
       summary: Manual IP lookup without API call
       description: Looks up an IP address only from the local cache/database without making an external API call to AbuseIPDB.
       tags:
@@ -629,6 +636,7 @@ paths:
 
   /api/enrich/ipabusedb/create:
     post:
+      operationId: createIPAbuseDB
       summary: Manually add IP to database
       description: Manually adds an IP address with abuse metadata to the local cache/database for future lookups.
       tags:
@@ -668,6 +676,7 @@ paths:
 
   /api/enrich/anomali:
     post:
+      operationId: lookupAnomali
       summary: Lookup IOC in Anomali
       description: Enriches an indicator of compromise (IP, domain, or hash) by checking it against the Anomali threat intelligence database.
       tags:
@@ -707,6 +716,7 @@ paths:
 
   /api/enrich/recordedfuture:
     post:
+      operationId: lookupRecordedFuture
       summary: Lookup IOCs in Recorded Future
       description: Enriches multiple indicators (IPs, domains, hashes) by checking them against the Recorded Future threat intelligence database. Supports batch operations up to 10 indicators per request.
       tags:
@@ -746,6 +756,7 @@ paths:
 
   /api/soar/sse/zscaler:
     post:
+      operationId: blockZscaler
       summary: Block IOCs in Zscaler SSE
       description: Adds one or more indicators to Zscaler's Security Service Edge (SSE) blocklist for automated traffic filtering. Requires valid Zscaler API credentials configured in AWS SSM.
       tags:
@@ -791,6 +802,7 @@ paths:
 
   /api/soar/azuread/ca:
     post:
+      operationId: blockAzureADConditionalAccess
       summary: Block IP in Azure AD Conditional Access
       description: Adds an IP address to an Azure AD Conditional Access named location list for automatic blocking of authentication attempts from that IP.
       tags:
@@ -836,6 +848,7 @@ paths:
 
   /api/soar/datp/blockioc:
     post:
+      operationId: blockDefenderATP
       summary: Block IOC in Windows Defender ATP
       description: Adds an indicator to Microsoft Defender for Endpoint (formerly DATP) with specified action (Block, Audit, or BlockAndRemediate) for automated threat prevention.
       tags:
@@ -881,6 +894,7 @@ paths:
 
   /api/soar/waf/blockip:
     post:
+      operationId: blockCloudflareWAF
       summary: Block IPs in Cloudflare WAF
       description: Adds one or more IP addresses to Cloudflare WAF rules across specified accounts for automated DDoS mitigation and threat blocking.
       tags:
