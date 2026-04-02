@@ -9,12 +9,6 @@ resource "null_resource" "upload_lambda_zip" {
 }
 
 resource "aws_lambda_function" "lambda" {
-  #checkov:skip=CKV_AWS_117: "Ensure that AWS Lambda function is configured inside a VPC"
-  #checkov:skip=CKV_AWS_272: "Ensure AWS Lambda function is configured to validate code-signing"
-  #checkov:skip=CKV_AWS_116: "Ensure that AWS Lambda function is configured for a Dead Letter Queue(DLQ)"
-  #checkov:skip=CKV_AWS_50: "X-ray tracing is enabled for Lambda"
-  #checkov:skip=CKV_AWS_115: "Ensure that AWS Lambda function is configured for function-level concurrent execution limit"
-  #checkov:skip=CKV_AWS_173: "Check encryption settings for Lambda environmental variable"
   function_name    = var.lambda_function_name
   role             = aws_iam_role.lambda_role.arn
   s3_bucket        = data.aws_s3_bucket.artefact_bucket.id
@@ -37,7 +31,7 @@ resource "aws_lambda_function" "lambda" {
       "SOAR_ACTIONS_TABLE_NAME"     = var.dynamodb_table_name_actions
       "SOAR_ACTIONS_TABLE_HASH_KEY" = var.dynamodb_primary_key_actions
       "SOAR_ACTIONS_SORT_KEY"       = var.dynamodb_sort_key_actions
-      "TENANT_ID"                   = var.ms_tenant_id
+      "TENANT_ID"                   = var.tenant_id
       "IDENTITY_POOL_ID"            = var.identity_pool_id
       "IDENTITY_POOL_LOGIN"         = var.identity_pool_login
     }

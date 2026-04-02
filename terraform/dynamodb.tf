@@ -1,5 +1,4 @@
 resource "aws_dynamodb_table" "ioc_table" {
-  #checkov:skip=CKV_AWS_119: "Ensure DynamoDB Tables are encrypted using a KMS Customer Managed CMK"
   name                        = var.dynamodb_table_name
   billing_mode                = "PAY_PER_REQUEST"
   deletion_protection_enabled = true
