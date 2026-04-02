@@ -2,6 +2,8 @@
 
 A comprehensive Security Orchestration, Automation, and Response (SOAR) platform built on AWS that automates and orchestrates security operations workflows. This API integrates with leading security tools to enable rapid threat enrichment, automated incident response, and coordinated remediation across your security infrastructure.
 
+**CICD**: Workflows directory holds some of the CICD jobs that would be used in production sense for Azure DevOps, not GitHub.
+
 ## Overview
 
 The SOAR API provides a centralized hub for security automation, allowing your team to:
