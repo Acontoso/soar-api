@@ -67,7 +67,7 @@ jobs:
         docker push ${{secrets.REGISTRY}}/${{secrets.REPOSITORY}}:${{steps.get_version.outputs.VERSION}}
         IMAGE_SHA=$(aws ecr describe-images --repository-name ${{secrets.REPOSITORY}} --image-ids imageTag=${{steps.get_version.outputs.VERSION}} --query 'imageDetails[].imageDigest' --output text)
         echo "::set-output name=image_sha::$IMAGE_SHA"
-
+      # AWS now supports the ability to sign your images directly when stored in ECR, referencing the AWS signer ARN to sign the image instead of doing during CICD
     - name: Sign image with key
       env:
         REGISTRY: ${{ steps.login-ecr.outputs.registry }}
