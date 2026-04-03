@@ -60,7 +60,7 @@ jobs:
         working-directory: terraform
         run: |
           terraform plan \
-            -var-file="envs/${{ inputs.environment }}.tfvars" \
+            -var-file="env/${{ inputs.environment }}.tfvars" \
             -out="${{ inputs.environment }}.tfplan" \
             -no-color 2>&1 | tee plan_output.txt
 
