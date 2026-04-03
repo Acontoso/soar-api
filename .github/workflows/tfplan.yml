@@ -16,11 +16,16 @@ permissions:
       id-token: write   # This is required for requesting the JWT
       contents: read    # This is required for actions/checkout
 
-jobs:
+# Prevent multiple plans running at once
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
 
+jobs:
   terraform-plan:
     name: Terraform Plan — ${{ inputs.environment }}
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
 
     permissions:
       id-token: write
