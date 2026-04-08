@@ -58,7 +58,7 @@ jobs:
         id: plan
         working-directory: terraform
         run: |
-          terraform apply --auto-approve \
+          terraform apply -auto-approve \
             -var-file="env/${{ inputs.environment }}.tfvars" \
             -no-color 2>&1 | tee apply_output.txt
 
