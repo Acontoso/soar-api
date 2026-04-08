@@ -11,14 +11,12 @@ on:
 env:
   AWS_REGION: ap-southeast-2
 
-
 permissions:
-      id-token: write   # This is required for requesting the JWT
-      contents: read    # This is required for actions/checkout
+      id-token: write 
+      contents: read
 
-# Prevent multiple plans running at once
 concurrency:
-  group: deploy-${{ inputs.environment }}
+  group: plan-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
@@ -38,7 +36,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsTerraformRole-${{ inputs.environment }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsTerraformRole
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Set up Terraform
@@ -71,17 +69,13 @@ jobs:
 
           # Surface plan exit code for summary
           echo "tf_exit_code=${PIPESTATUS[0]}" >> $GITHUB_ENV
-        # Anything you append to $GITHUB_STEP_SUMMARY appears in the “Job Summary” panel of the workflow run.
-        # Each step can write Markdown to it.
-        # GitHub collects the content and displays it as a formatted summary at the end of the job.
       - name: Write plan to job summary
         if: always()
-        # Get the output stored within the output file as show above
         run: |
           PLAN=$(cat terraform/plan_output.txt)
           TRUNCATED=${PLAN:0:60000}
 
-          echo "### 📋 Terraform Plan — \`${{ inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Terraform Plan — \`${{ inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
           echo ""                                                        >> $GITHUB_STEP_SUMMARY
           echo "| Key | Value |"                                         >> $GITHUB_STEP_SUMMARY
           echo "|-----|-------|"                                         >> $GITHUB_STEP_SUMMARY
