@@ -13,24 +13,9 @@ variable "cost_centre" {
   type        = string
 }
 
-variable "dynamodb_table_name" {
-  description = "Name of the DyanamoDB table that will store data"
-  type        = string
-}
-
-variable "dynamodb_table_name_actions" {
-  description = "Name of the DyanamoDB table that will store SOAR actions"
-  type        = string
-}
-
 variable "api_gateway_name" {
   description = "Name of API Gateway"
   type        = string
-}
-
-variable "trusted_ip_list_api_gw" {
-  description = "List of IP addresses that can trigger gateway"
-  type        = list(string)
 }
 
 variable "api_burst_limit" {
@@ -63,29 +48,39 @@ variable "sns_topic_name" {
   description = "SNS topic name"
 }
 
-variable "dynamodb_table" {
+variable "dynamodb_table_name_ioc" {
   type        = string
   description = "DynamoDB table used by the Lambda"
 }
 
-variable "dynamodb_primary_key" {
+variable "dynamodb_primary_key_ioc" {
   type        = string
   description = "DynamoDB partition key"
 }
 
-variable "dynamodb_sort_key" {
+variable "dynamodb_sort_key_ioc" {
   type        = string
   description = "DynamoDB sort key"
+}
+
+variable "dynamodb_table_name_actions" {
+  type        = string
+  description = "DynamoDB table used by the Lambda for actions"
 }
 
 variable "dynamodb_primary_key_actions" {
   type        = string
-  description = "DynamoDB partition key"
+  description = "DynamoDB partition key for actions"
 }
 
 variable "dynamodb_sort_key_actions" {
   type        = string
-  description = "DynamoDB sort key"
+  description = "DynamoDB sort key for actions"
+}
+
+variable "s3_bucket_name" {
+  type        = string
+  description = "S3 bucket name to store Lambda compiled go code artefacts"
 }
 
 variable "runtime" {
@@ -133,12 +128,12 @@ variable "ms_tenant_id" {
   description = "Microsoft Tenant ID specific to this installation"
 }
 
-variable "congnito_oidc_userpool" {
+variable "cognito_oidc_userpool" {
   type        = string
   description = "Name of cognito userpool used to run OIDC service for client credential flow"
 }
 
-variable "congnito_oidc_client_app" {
+variable "cognito_oidc_client_app" {
   type        = string
   description = "Client app that represents the consumer service authenticating to soar API"
 }
@@ -251,4 +246,9 @@ variable "authorization_type" {
 variable "arn_oauth_outbound_provider" {
   type        = string
   description = "ARN of the OAuth outbound provider used to authenticate to the gateway"
+}
+
+variable "identity_pool_name" {
+  type        = string
+  description = "Name of the Cognito OIDC identity pool"
 }

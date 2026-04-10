@@ -1,9 +1,9 @@
 resource "aws_dynamodb_table" "ioc_table" {
-  name                        = var.dynamodb_table_name
+  name                        = var.dynamodb_table_name_ioc
   billing_mode                = "PAY_PER_REQUEST"
   deletion_protection_enabled = true
-  hash_key                    = "IOC"
-  range_key                   = "EnrichmentSource"
+  hash_key                    = var.dynamodb_primary_key_ioc
+  range_key                   = var.dynamodb_sort_key_ioc
 
   attribute {
     name = "IOC"
@@ -56,16 +56,15 @@ resource "aws_dynamodb_table" "ioc_table" {
     projection_type = "ALL"
     range_key       = "IncidentID"
   }
-  tags = local.tags
+  tags = var.tags
 }
 
 resource "aws_dynamodb_table" "actions_table" {
-  #checkov:skip=CKV_AWS_119: "Ensure DynamoDB Tables are encrypted using a KMS Customer Managed CMK"
   name                        = var.dynamodb_table_name_actions
   billing_mode                = "PAY_PER_REQUEST"
   deletion_protection_enabled = true
-  hash_key                    = "IOC"
-  range_key                   = "Integration"
+  hash_key                    = var.dynamodb_primary_key_actions
+  range_key                   = var.dynamodb_sort_key_actions
 
   attribute {
     name = "IOC"
@@ -104,5 +103,5 @@ resource "aws_dynamodb_table" "actions_table" {
   point_in_time_recovery {
     enabled = true
   }
-  tags = local.tags
+  tags = var.tags
 }

@@ -18,5 +18,5 @@ module "sns" {
   }
 
   sqs_dlq_enabled = false
-  tags            = local.tags
+  tags            = var.tags
 }

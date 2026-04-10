@@ -5,7 +5,7 @@ resource "aws_api_gateway_rest_api" "gateway_object" {
   endpoint_configuration {
     types = ["REGIONAL"]
   }
-  tags = local.tags
+  tags = var.tags
 }
 
 resource "aws_api_gateway_resource" "proxy_resource" {
@@ -32,7 +32,7 @@ resource "aws_api_gateway_integration" "lambda_integration" {
   http_method             = aws_api_gateway_method.proxy_method_lambda.http_method
   type                    = "AWS_PROXY"
   integration_http_method = "POST"
-  uri                     = aws_lambda_function.lambda.invoke_arn
+  uri                     = var.aws_lambda_function_arn
   timeout_milliseconds    = 29000
 }
 
@@ -53,7 +53,7 @@ resource "aws_api_gateway_stage" "core_stage" {
   rest_api_id   = aws_api_gateway_rest_api.gateway_object.id
   stage_name    = var.stage_name_api_gateway
   deployment_id = aws_api_gateway_deployment.single_deployment.id
-  tags          = local.tags
+  tags          = var.tags
 }
 
 data "aws_iam_policy_document" "api_gateway_resource_based_policy" {
@@ -93,7 +93,7 @@ resource "aws_api_gateway_usage_plan" "default_usage_plan" {
     api_id = aws_api_gateway_rest_api.gateway_object.id
     stage  = aws_api_gateway_stage.core_stage.stage_name
   }
-  tags = local.tags
+  tags = var.tags
 }
 
 ########OpenID Connect Authorizer##########
@@ -101,5 +101,13 @@ resource "aws_api_gateway_authorizer" "cognito_authorizer" {
   name          = var.apigw_cognito_authorizer_name
   rest_api_id   = aws_api_gateway_rest_api.gateway_object.id
   type          = "COGNITO_USER_POOLS"
-  provider_arns = [aws_cognito_user_pool.oidc_userpool.arn]
+  provider_arns = [var.cognito_user_pool_arn]
+}
+
+resource "aws_lambda_permission" "api_gateway_trigger" {
+  statement_id  = "AllowExecutionFromAPIGW"
+  action        = "lambda:InvokeFunction"
+  function_name = var.aws_lambda_function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.gateway_object.execution_arn}/*/*/*" #All methods and stages
 }

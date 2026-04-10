@@ -1,7 +1,11 @@
+data "aws_cognito_identity_pool" "identity_pool_oidc" {
+  identity_pool_name = var.identity_pool_name
+}
+
 resource "aws_cognito_user_pool" "oidc_userpool" {
-  name           = var.congnito_oidc_userpool
+  name           = var.cognito_oidc_userpool
   user_pool_tier = "LITE"
-  tags           = local.tags
+  tags           = var.tags
 }
 
 resource "aws_cognito_user_pool_domain" "cognito_domain" {
@@ -27,7 +31,7 @@ resource "aws_cognito_resource_server" "soar_api_resource_server" {
 }
 
 resource "aws_cognito_user_pool_client" "az_logic_apps_client" {
-  name                                 = var.congnito_oidc_client_app
+  name                                 = var.cognito_oidc_client_app
   generate_secret                      = true
   access_token_validity                = 1
   refresh_token_validity               = 1

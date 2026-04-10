@@ -1,3 +1,21 @@
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+data "aws_kms_key" "ssm_kms_alias" {
+  key_id = "alias/cmk-ssm"
+}
+
+data "aws_s3_object" "lambda_zip" {
+  #Reference the object in the S3 bucket after the upload has successfully completed
+  bucket     = data.aws_s3_bucket.artefact_bucket.id
+  key        = "code.zip"
+  depends_on = [null_resource.upload_lambda_zip]
+}
+
+data "aws_s3_bucket" "artefact_bucket" {
+  bucket = var.s3_bucket_name
+}
+
 resource "null_resource" "upload_lambda_zip" {
   triggers = {
     always_run = timestamp()
@@ -16,7 +34,7 @@ resource "aws_lambda_function" "lambda" {
   handler          = var.handler
   runtime          = var.runtime
   memory_size      = var.memory_size
-  tags             = local.tags
+  tags             = var.tags
   timeout          = var.timeout
   description      = var.description
   source_code_hash = data.aws_s3_object.lambda_zip.etag
@@ -25,13 +43,13 @@ resource "aws_lambda_function" "lambda" {
   }
   environment {
     variables = {
-      "IOC_TABLE_NAME"              = var.dynamodb_table
-      "IOC_TABLE_HASH_KEY"          = var.dynamodb_primary_key
-      "IOC_TABLE_SORT_KEY"          = var.dynamodb_sort_key
+      "IOC_TABLE_NAME"              = var.dynamodb_table_name_ioc
+      "IOC_TABLE_HASH_KEY"          = var.dynamodb_primary_key_ioc
+      "IOC_TABLE_SORT_KEY"          = var.dynamodb_sort_key_ioc
       "SOAR_ACTIONS_TABLE_NAME"     = var.dynamodb_table_name_actions
       "SOAR_ACTIONS_TABLE_HASH_KEY" = var.dynamodb_primary_key_actions
       "SOAR_ACTIONS_SORT_KEY"       = var.dynamodb_sort_key_actions
-      "TENANT_ID"                   = var.tenant_id
+      "TENANT_ID"                   = var.ms_tenant_id
       "IDENTITY_POOL_ID"            = var.identity_pool_id
       "IDENTITY_POOL_LOGIN"         = var.identity_pool_login
     }
@@ -46,7 +64,7 @@ resource "null_resource" "go_compile" {
   #Compile Go application for Lambda
   # This builds the Go binary and outputs it as 'bootstrap' in the code directory
   provisioner "local-exec" {
-    command = "cd ${path.module}/../code && GOOS=linux GOARCH=amd64 go build -ldflags=\"-w -s\" -o bootstrap ."
+    command = "cd ${path.module}/../../../code && GOOS=linux GOARCH=amd64 go build -ldflags=\"-w -s\" -o bootstrap ."
   }
 }
 
@@ -55,7 +73,7 @@ resource "null_resource" "go_compile" {
 
 data "archive_file" "code" {
   type        = "zip"
-  source_dir  = "${path.module}/../code"               # Use code dir for Go application
+  source_dir  = "${path.module}/../../../code"               # Use code dir for Go application
   output_path = "${path.root}/terraform/code.zip"      # Use absolute path for CI/CD reliability
   excludes    = ["*.go", "go.mod", "go.sum", "tst.py"] # Exclude source files, keep only bootstrap binary
   depends_on  = [null_resource.go_compile]
@@ -80,7 +98,7 @@ data "aws_iam_policy_document" "lambda_custom_execution_policy" {
       "sns:Publish",
     ]
     resources = [
-      module.sns.sns_topic_arn
+      var.sns_topic_arn
     ]
   }
   statement {
@@ -105,8 +123,8 @@ data "aws_iam_policy_document" "lambda_custom_execution_policy" {
       "dynamodb:BatchWriteItem"
     ]
     resources = [
-      aws_dynamodb_table.ioc_table.arn,
-      aws_dynamodb_table.actions_table.arn
+      var.dynamodb_table_arn_ioc,
+      var.dynamodb_table_arn_actions
     ]
   }
   statement {
@@ -119,7 +137,7 @@ data "aws_iam_policy_document" "lambda_custom_execution_policy" {
       "cognito-identity:UnlinkDeveloperIdentity"
     ]
     resources = [
-      data.aws_cognito_identity_pool.identity_pool_oidc.arn
+      var.cognito_identity_pool_arn
     ]
   }
 }
@@ -127,13 +145,13 @@ data "aws_iam_policy_document" "lambda_custom_execution_policy" {
 resource "aws_iam_policy" "lambda_iam_policy" {
   name   = "${var.lambda_function_name}-lambda-policy"
   policy = data.aws_iam_policy_document.lambda_custom_execution_policy.json
-  tags   = local.tags
+  tags   = var.tags
 }
 
 resource "aws_iam_role" "lambda_role" {
   name               = "${var.lambda_function_name}-lambda-execution-role"
   assume_role_policy = data.aws_iam_policy_document.trust_policy_document_lambda.json
-  tags               = local.tags
+  tags               = var.tags
 }
 
 data "aws_iam_policy_document" "trust_policy_document_lambda" {
@@ -172,22 +190,7 @@ resource "aws_lambda_function_event_invoke_config" "lambda_retry_failure" {
   maximum_retry_attempts       = 0
   destination_config {
     on_failure {
-      destination = module.sns.sns_topic_arn
+      destination = var.sns_topic_arn
     }
   }
 }
-
-resource "aws_lambda_permission" "api_gateway_trigger" {
-  statement_id  = "AllowExecutionFromAPIGW"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.lambda.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.gateway_object.execution_arn}/*/*/*" #All methods and stages
-}
-
-# resource "null_resource" "check_zip" {
-#   depends_on = [data.archive_file.code]
-#   provisioner "local-exec" {
-#     command = "ls -lh ${path.root}/terraform/application.zip && unzip -l ${path.root}/terraform/application.zip"
-#   }
-# }

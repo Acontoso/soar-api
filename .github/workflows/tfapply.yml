@@ -59,7 +59,7 @@ jobs:
         working-directory: terraform
         run: |
           terraform apply -auto-approve \
-            -var-file="env/${{ inputs.environment }}.tfvars" \
+            -var-file="environments/${{ inputs.environment }}.tfvars" \
             -no-color 2>&1 | tee apply_output.txt
 
       - name: Write apply to job summary
